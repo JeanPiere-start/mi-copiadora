@@ -1,0 +1,209 @@
+{% extends 'base.html' %}
+{% block title %}CRM — Clientes{% endblock %}
+
+{% block head %}
+<style>
+  .client-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr));
+                 gap:12px; }
+  .client-card { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow);
+                 padding:16px; border-left:4px solid var(--blue); transition:box-shadow .2s; }
+  .client-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.12); }
+  .client-name { font-size:16px; font-weight:700; }
+  .client-meta { font-size:13px; color:var(--muted); margin-top:3px; }
+  .pts-circle  { width:48px; height:48px; border-radius:50%; background:var(--blue);
+                 color:#fff; display:flex; align-items:center; justify-content:center;
+                 font-size:15px; font-weight:800; flex-shrink:0; }
+  .pts-circle.ready { background:var(--green); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.1); } }
+
+  .frecuentes-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .frecuentes-table th { background:var(--green); color:#fff; padding:9px 12px;
+                          text-align:left; }
+  .frecuentes-table td { padding:9px 12px; border-bottom:1px solid var(--border); }
+  .frecuentes-table tr:hover td { background:#F0FFF8; }
+
+  .tab-btn { padding:10px 18px; border:none; background:transparent; cursor:pointer;
+             font-size:14px; font-weight:600; color:var(--muted);
+             border-bottom:3px solid transparent; transition:all .2s; }
+  .tab-btn.active { color:var(--blue); border-bottom-color:var(--blue); }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center" style="margin-bottom:16px;flex-wrap:wrap;gap:10px">
+  <h2 style="font-size:19px;font-weight:800;color:var(--blue)">👥 CRM — Clientes y Fidelización</h2>
+  <button class="btn btn-success" onclick="abrirNuevo()">+ Nuevo cliente</button>
+</div>
+
+<!-- Info puntos -->
+<div class="alert alert-success" style="margin-bottom:16px">
+  🎁 <strong>Sistema de puntos:</strong> Cada S/10 en compras = 1 punto. Con 10 puntos, el cliente canjea 1 copia gratis.
+</div>
+
+<!-- Tabs -->
+<div style="border-bottom:2px solid var(--border);margin-bottom:16px">
+  <button class="tab-btn active" onclick="showTab('clientes', this)">👤 Todos los clientes ({{ clientes|length }})</button>
+  <button class="tab-btn" onclick="showTab('frecuentes', this)">⭐ Clientes frecuentes</button>
+</div>
+
+<!-- TAB: Clientes -->
+<div class="tab-content active" id="tab-clientes">
+  {% if clientes %}
+  <!-- Buscador local -->
+  <div class="form-group" style="max-width:360px;margin-bottom:14px">
+    <input type="text" id="local-search" placeholder="🔍 Buscar cliente…" oninput="filtrarLocal(this.value)">
+  </div>
+  <div class="client-grid" id="client-grid">
+    {% for c in clientes %}
+    <div class="client-card" data-nombre="{{ c.nombre|lower }}">
+      <div class="flex justify-between items-center">
+        <div>
+          <div class="client-name">{{ c.nombre }}</div>
+          <div class="client-meta">
+            {% if c.celular %}📱 {{ c.celular }}{% else %}<span class="text-muted">Sin celular</span>{% endif %}
+          </div>
+          <div class="client-meta">📅 Desde {{ c.fecha_registro.strftime('%d/%m/%Y') }}</div>
+        </div>
+        <div style="text-align:center">
+          <div class="pts-circle {% if c.puntos >= 10 %}ready{% endif %}"
+               title="{{ c.puntos }} puntos{% if c.puntos >= 10 %} — ¡Listo para canjear!{% endif %}">
+            {{ c.puntos }}
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:3px">puntos</div>
+        </div>
+      </div>
+      {% if c.puntos >= 10 %}
+      <div class="badge badge-green" style="margin-top:8px">
+        🎁 ¡Puede canjear {{ c.puntos // 10 }} copia(s) gratis!
+      </div>
+      {% endif %}
+      <div class="mt-2">
+        <a href="{{ url_for('ver_cliente', id=c.id) }}" class="btn btn-outline btn-sm btn-full">
+          Ver historial →
+        </a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card text-center" style="padding:40px">
+    <p style="font-size:40px;margin-bottom:10px">👤</p>
+    <p class="text-muted">No hay clientes registrados todavía.</p>
+    <button class="btn btn-success mt-3" onclick="abrirNuevo()">+ Registrar primer cliente</button>
+  </div>
+  {% endif %}
+</div>
+
+<!-- TAB: Frecuentes -->
+<div class="tab-content" id="tab-frecuentes">
+  <div class="card" style="padding:0">
+    <div class="tbl-wrap">
+      <table class="frecuentes-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Cliente</th>
+            <th>Celular</th>
+            <th>Compras</th>
+            <th>Total gastado</th>
+            <th>Puntos</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if frecuentes %}
+            {% for cli, num, total in frecuentes %}
+            <tr>
+              <td><strong>{{ loop.index }}</strong></td>
+              <td>
+                <a href="{{ url_for('ver_cliente', id=cli.id) }}"
+                   style="color:var(--blue);font-weight:700;text-decoration:none">
+                  {{ cli.nombre }}
+                </a>
+              </td>
+              <td>{{ cli.celular or '—' }}</td>
+              <td>{{ num }}</td>
+              <td class="monto">S/{{ "%.2f"|format(total or 0) }}</td>
+              <td>
+                <span class="badge {% if cli.puntos >= 10 %}badge-green{% else %}badge-blue{% endif %}">
+                  {{ cli.puntos }} pts
+                </span>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="6" class="text-center text-muted" style="padding:24px">
+              Sin datos de compras vinculadas a clientes todavía.
+            </td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal nuevo cliente -->
+<div class="modal-overlay" id="modal-nuevo">
+  <div class="modal-box">
+    <div class="modal-title">
+      Nuevo cliente
+      <button class="modal-close" onclick="cerrarNuevo()">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Nombre completo *</label>
+      <input type="text" id="nc-nombre" placeholder="Ej: María López">
+    </div>
+    <div class="form-group">
+      <label>Celular (opcional)</label>
+      <input type="tel" id="nc-celular" placeholder="Ej: 999 000 000">
+    </div>
+    <button class="btn btn-success btn-full" onclick="guardarCliente()">Guardar cliente</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showTab(id, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+
+function filtrarLocal(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#client-grid .client-card').forEach(card => {
+    card.style.display = card.dataset.nombre.includes(q) ? '' : 'none';
+  });
+}
+
+function abrirNuevo() { document.getElementById('modal-nuevo').classList.add('open'); }
+function cerrarNuevo() { document.getElementById('modal-nuevo').classList.remove('open'); }
+
+async function guardarCliente() {
+  const nombre  = document.getElementById('nc-nombre').value.trim();
+  const celular = document.getElementById('nc-celular').value.trim();
+  if (!nombre) { showFlash('El nombre es requerido', 'error'); return; }
+
+  const fd = new FormData();
+  fd.append('nombre',  nombre);
+  fd.append('celular', celular);
+
+  const r    = await fetch('/crm/cliente/nuevo', { method:'POST', body:fd });
+  const data = await r.json();
+  if (data.id) {
+    showFlash(`✓ Cliente "${data.nombre}" registrado`, 'success');
+    cerrarNuevo();
+    setTimeout(() => location.reload(), 1200);
+  } else {
+    showFlash(data.error || 'Error', 'error');
+  }
+}
+
+document.getElementById('modal-nuevo').addEventListener('click', function(e) {
+  if (e.target === this) cerrarNuevo();
+});
+</script>
+{% endblock %}

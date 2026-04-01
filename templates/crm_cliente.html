@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+{% block title %}Cliente: {{ cliente.nombre }}{% endblock %}
+
+{% block head %}
+<style>
+  .client-header { background:linear-gradient(135deg, var(--blue), #0F5FCF);
+                   color:#fff; border-radius:var(--radius); padding:24px;
+                   margin-bottom:16px; display:flex; align-items:center;
+                   gap:16px; flex-wrap:wrap; }
+  .client-avatar { width:64px; height:64px; border-radius:50%; background:rgba(255,255,255,.25);
+                   display:flex; align-items:center; justify-content:center;
+                   font-size:28px; flex-shrink:0; }
+  .client-header h1 { font-size:20px; font-weight:800; }
+  .client-header .sub { font-size:14px; opacity:.85; margin-top:2px; }
+
+  .pts-big { background:rgba(255,255,255,.2); border-radius:12px; padding:12px 18px;
+             text-align:center; margin-left:auto; }
+  .pts-big .num  { font-size:36px; font-weight:900; }
+  .pts-big .lbl  { font-size:11px; opacity:.85; }
+  .pts-big.ready { background:var(--green); }
+</style>
+{% endblock %}
+
+{% block content %}
+<a href="{{ url_for('crm') }}" class="btn btn-outline btn-sm" style="margin-bottom:12px">
+  ← Volver al CRM
+</a>
+
+<!-- Cabecera del cliente -->
+<div class="client-header">
+  <div class="client-avatar">👤</div>
+  <div>
+    <h1 id="cli-nombre">{{ cliente.nombre }}</h1>
+    <div class="sub" id="cli-celular">
+      {% if cliente.celular %}📱 {{ cliente.celular }}{% else %}Sin celular registrado{% endif %}
+    </div>
+    <div class="sub">📅 Cliente desde {{ cliente.fecha_registro.strftime('%d/%m/%Y') }}</div>
+  </div>
+  <div class="pts-big {% if cliente.puntos >= 10 %}ready{% endif %}">
+    <div class="num" id="pts-display">{{ cliente.puntos }}</div>
+    <div class="lbl">puntos</div>
+    {% if cliente.puntos >= 10 %}
+    <div style="font-size:12px;margin-top:4px">🎁 ¡Puede canjear!</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Info de puntos -->
+<div class="card">
+  <div class="card-title">🎁 Sistema de puntos</div>
+  <div class="stats">
+    <div class="stat green">
+      <div class="stat-val">{{ cliente.puntos }}</div>
+      <div class="stat-label">Puntos actuales</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val">{{ cliente.puntos // 10 }}</div>
+      <div class="stat-label">Copias canjeables</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val">{{ 10 - (cliente.puntos % 10) if cliente.puntos % 10 != 0 else 0 }}</div>
+      <div class="stat-label">Pts para próxima copia</div>
+    </div>
+  </div>
+
+  {% if cliente.puntos >= 10 %}
+  <div class="alert alert-success">
+    ✨ Este cliente puede canjear <strong>{{ cliente.puntos // 10 }}</strong> copia(s) gratis.
+    El canje se realiza desde la pantalla de <strong>Ventas</strong> al seleccionar a este cliente.
+  </div>
+  {% else %}
+  <div class="alert alert-warn">
+    Necesita <strong>{{ 10 - cliente.puntos }}</strong> puntos más para su primera copia gratis.
+    (Compra mínima: S/{{ (10 - cliente.puntos) * 10 }}.00)
+  </div>
+  {% endif %}
+
+  <!-- Historial de puntos -->
+  {% if cliente.historial_puntos %}
+  <hr>
+  <div class="card-title" style="margin-bottom:10px">Movimientos de puntos</div>
+  <ul style="list-style:none">
+    {% for h in cliente.historial_puntos[-10:]|reverse %}
+    <li style="display:flex;justify-content:space-between;padding:7px 0;
+               border-bottom:1px solid var(--border);font-size:13px">
+      <span>{{ h.descripcion }}</span>
+      <span class="badge {% if h.puntos > 0 %}badge-green{% else %}badge-red{% endif %}">
+        {{ '+' if h.puntos > 0 else '' }}{{ h.puntos }} pts
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+
+<!-- Editar cliente -->
+<div class="card">
+  <div class="card-title">✏️ Editar datos del cliente</div>
+  <div class="form-group">
+    <label>Nombre</label>
+    <input type="text" id="edit-nombre" value="{{ cliente.nombre }}">
+  </div>
+  <div class="form-group">
+    <label>Celular</label>
+    <input type="tel" id="edit-celular" value="{{ cliente.celular or '' }}">
+  </div>
+  <button class="btn btn-primary" onclick="guardarEdicion()">💾 Guardar cambios</button>
+</div>
+
+<!-- Historial de compras -->
+<div class="card" style="padding:0">
+  <div style="padding:16px 16px 8px">
+    <div class="card-title">🛒 Historial de compras ({{ historial|length }})</div>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Hora</th>
+          <th>Servicio</th>
+          <th>Cant.</th>
+          <th>Total</th>
+          <th>Tipo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if historial %}
+          {% set total_gastado = namespace(v=0) %}
+          {% for v in historial %}
+          {% set total_gastado.v = total_gastado.v + v.total %}
+          <tr>
+            <td>{{ v.fecha.strftime('%d/%m/%Y') }}</td>
+            <td>{{ v.hora.strftime('%H:%M') }}</td>
+            <td>{{ v.servicio.nombre }}</td>
+            <td>{{ v.cantidad }}</td>
+            <td class="monto">S/{{ "%.2f"|format(v.total) }}</td>
+            <td>
+              {% if v.es_canje %}
+                <span class="badge badge-green">🎁 Canje</span>
+              {% else %}
+                <span class="badge badge-blue">Compra</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+          <tr style="background:#F0FFF8">
+            <td colspan="4"><strong>TOTAL</strong></td>
+            <td colspan="2" class="monto"><strong>S/{{ "%.2f"|format(total_gastado.v) }}</strong></td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="text-center text-muted" style="padding:24px">
+            Sin compras registradas todavía.
+          </td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function guardarEdicion() {
+  const nombre  = document.getElementById('edit-nombre').value.trim();
+  const celular = document.getElementById('edit-celular').value.trim();
+  if (!nombre) { showFlash('El nombre es requerido', 'error'); return; }
+
+  const fd = new FormData();
+  fd.append('nombre',  nombre);
+  fd.append('celular', celular);
+
+  const r    = await fetch('/crm/cliente/{{ cliente.id }}/editar', { method:'POST', body:fd });
+  const data = await r.json();
+  if (data.success) {
+    document.getElementById('cli-nombre').textContent  = nombre;
+    document.getElementById('cli-celular').textContent = celular ? '📱 ' + celular : 'Sin celular registrado';
+    showFlash('✓ Datos actualizados', 'success');
+  } else {
+    showFlash('Error al guardar', 'error');
+  }
+}
+</script>
+{% endblock %}

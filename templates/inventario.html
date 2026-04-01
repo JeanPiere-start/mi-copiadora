@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+{% block title %}Inventario{% endblock %}
+
+{% block head %}
+<style>
+  .progress-wrap { background:#E5E7EB; border-radius:20px; height:22px; overflow:hidden;
+                   margin:10px 0 6px; }
+  .progress-bar  { height:100%; border-radius:20px; transition:width .6s ease;
+                   display:flex; align-items:center; justify-content:flex-end;
+                   padding-right:10px; color:#fff; font-size:12px; font-weight:700; }
+  .progress-bar.ok      { background:var(--green); }
+  .progress-bar.warning { background:var(--warn); }
+  .progress-bar.danger  { background:var(--danger); }
+
+  .tipo-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .tipo-btn  { padding:14px; border:2px solid var(--border); border-radius:12px;
+               cursor:pointer; text-align:center; transition:all .2s; }
+  .tipo-btn:hover, .tipo-btn.sel { border-color:var(--blue); background:#EEF4FF; }
+  .tipo-btn span { display:block; font-size:24px; }
+  .tipo-btn small { font-size:12px; color:var(--muted); }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2 style="font-size:19px;font-weight:800;color:var(--blue);margin-bottom:16px">📦 Inventario de insumos</h2>
+
+<!-- Alerta -->
+{% if alerta %}
+<div class="alert alert-danger">
+  ⚠️ <strong>¡Stock bajo!</strong> Quedan solo <strong>{{ restantes }}</strong> hojas.
+  El mínimo recomendado es {{ minimo }} hojas. ¡Repón papel pronto!
+</div>
+{% endif %}
+
+<!-- Estado del papel -->
+<div class="card">
+  <div class="card-title">📄 Papel bond 75g</div>
+
+  <div class="stats" style="margin-bottom:12px">
+    <div class="stat {% if alerta %}danger{% else %}green{% endif %}">
+      <div class="stat-val" style="{% if alerta %}color:var(--danger){% endif %}">{{ restantes }}</div>
+      <div class="stat-label">Hojas restantes</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val">{{ hojas_usadas }}</div>
+      <div class="stat-label">Hojas usadas</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val">{{ total_papel }}</div>
+      <div class="stat-label">Total ingresado</div>
+    </div>
+  </div>
+
+  <label>Stock actual ({{ porcentaje }}%)</label>
+  <div class="progress-wrap">
+    <div class="progress-bar {% if alerta %}danger{% elif porcentaje < 40 %}warning{% else %}ok{% endif %}"
+         style="width:{{ [porcentaje, 5]|max }}%">
+      {% if porcentaje > 15 %}{{ restantes }} hojas{% endif %}
+    </div>
+  </div>
+  <div class="flex justify-between text-muted" style="font-size:12px">
+    <span>0</span>
+    <span>Mínimo: {{ minimo }}</span>
+    <span>{{ total_papel }}</span>
+  </div>
+</div>
+
+<!-- Registrar reposición -->
+<div class="card">
+  <div class="card-title">➕ Registrar reposición</div>
+  <form method="POST" action="{{ url_for('agregar_inventario') }}">
+
+    <div class="form-group">
+      <label>Tipo de insumo</label>
+      <div class="tipo-grid">
+        <label class="tipo-btn {% if not request.form.tipo or request.form.tipo == 'papel' %}sel{% endif %}"
+               onclick="this.parentElement.querySelectorAll('.tipo-btn').forEach(b=>b.classList.remove('sel'));this.classList.add('sel')">
+          <input type="radio" name="tipo" value="papel" style="display:none" checked>
+          <span>📄</span>Papel bond
+          <small>Hojas A4/Carta</small>
+        </label>
+        <label class="tipo-btn"
+               onclick="this.parentElement.querySelectorAll('.tipo-btn').forEach(b=>b.classList.remove('sel'));this.classList.add('sel')">
+          <input type="radio" name="tipo" value="tinta_negra" style="display:none">
+          <span>🖋</span>Tinta negra
+          <small>Cartucho/botella</small>
+        </label>
+        <label class="tipo-btn"
+               onclick="this.parentElement.querySelectorAll('.tipo-btn').forEach(b=>b.classList.remove('sel'));this.classList.add('sel')">
+          <input type="radio" name="tipo" value="tinta_color" style="display:none">
+          <span>🎨</span>Tinta color
+          <small>Cartucho/botella</small>
+        </label>
+        <label class="tipo-btn"
+               onclick="this.parentElement.querySelectorAll('.tipo-btn').forEach(b=>b.classList.remove('sel'));this.classList.add('sel')">
+          <input type="radio" name="tipo" value="otro" style="display:none">
+          <span>📦</span>Otro insumo
+          <small>Especificar en nota</small>
+        </label>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Cantidad (hojas / unidades)</label>
+      <input type="number" name="cantidad" min="1" placeholder="Ej: 500" required>
+    </div>
+
+    <div class="form-group">
+      <label>Nota (opcional)</label>
+      <input type="text" name="nota" placeholder="Ej: Compra en Tai Loy S/45.00">
+    </div>
+
+    <button type="submit" class="btn btn-success btn-full">✓ Registrar reposición</button>
+  </form>
+</div>
+
+<!-- Historial de reposiciones -->
+<div class="card" style="padding:0">
+  <div style="padding:16px 16px 8px">
+    <div class="card-title">🕑 Historial de reposiciones</div>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Tipo</th>
+          <th>Cantidad</th>
+          <th>Nota</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if reposiciones %}
+          {% for r in reposiciones %}
+          <tr>
+            <td>{{ r.fecha.strftime('%d/%m/%Y') }}</td>
+            <td>
+              {% if r.tipo == 'papel' %}📄 Papel
+              {% elif r.tipo == 'tinta_negra' %}🖋 Tinta negra
+              {% elif r.tipo == 'tinta_color' %}🎨 Tinta color
+              {% else %}📦 {{ r.tipo }}{% endif %}
+            </td>
+            <td><strong>{{ r.cantidad }}</strong></td>
+            <td class="text-muted">{{ r.nota or '—' }}</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="4" class="text-center text-muted" style="padding:24px">
+            Sin reposiciones registradas.
+          </td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

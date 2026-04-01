@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+{% block title %}Panel del día{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  .panel-date { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .export-bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+  .export-bar input { flex:1; min-width:120px; max-width:160px; }
+  canvas { max-height: 280px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center" style="margin-bottom:8px">
+  <h2 style="font-size:19px;font-weight:800;color:var(--blue)">📊 Panel de {{ nombre_negocio }}</h2>
+  <span class="badge badge-blue">{{ hoy.strftime('%d/%m/%Y') }}</span>
+</div>
+
+<!-- Stats del día -->
+<div class="stats">
+  <div class="stat green">
+    <div class="stat-val">S/{{ "%.2f"|format(ing_hoy) }}</div>
+    <div class="stat-label">Ingresos hoy</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val">{{ tx_hoy }}</div>
+    <div class="stat-label">Transacciones</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val" style="font-size:16px;padding-top:4px">{{ srv_top }}</div>
+    <div class="stat-label">Servicio top hoy</div>
+  </div>
+</div>
+
+<!-- Stats de la semana -->
+<div class="card">
+  <div class="card-title">📅 Esta semana</div>
+  <div class="stats" style="margin-bottom:0">
+    <div class="stat green">
+      <div class="stat-val">S/{{ "%.2f"|format(ing_sem) }}</div>
+      <div class="stat-label">Ingresos</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val">{{ tx_sem }}</div>
+      <div class="stat-label">Transacciones</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val">S/{{ "%.2f"|format(ing_sem / tx_sem if tx_sem else 0) }}</div>
+      <div class="stat-label">Ticket promedio</div>
+    </div>
+  </div>
+</div>
+
+<!-- Gráfico -->
+<div class="card">
+  <div class="card-title">📈 Ventas por servicio hoy</div>
+  {% if grafico_json and grafico_json != '[]' %}
+  <canvas id="chartVentas"></canvas>
+  {% else %}
+  <p class="text-muted text-center" style="padding:20px">Sin datos de ventas para hoy.</p>
+  {% endif %}
+</div>
+
+<!-- Exportar Excel -->
+<div class="card">
+  <div class="card-title">📥 Exportar reporte Excel</div>
+  <div class="export-bar">
+    <div>
+      <label>Desde</label>
+      <input type="date" id="exp-desde" value="{{ hoy.strftime('%Y-%m-%d') }}">
+    </div>
+    <div>
+      <label>Hasta</label>
+      <input type="date" id="exp-hasta" value="{{ hoy.strftime('%Y-%m-%d') }}">
+    </div>
+    <button class="btn btn-success" onclick="exportar()">⬇️ Descargar Excel</button>
+  </div>
+  <p class="text-muted" style="font-size:12px">
+    El Excel incluye resumen, ventas por día, por servicio, detalle completo y análisis de rentabilidad.
+  </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const graficoData = {{ grafico_json|safe }};
+
+if (graficoData.length > 0) {
+  const ctx = document.getElementById('chartVentas').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: graficoData.map(d => d.nombre),
+      datasets: [
+        {
+          label: 'Ingresos (S/)',
+          data:  graficoData.map(d => d.ingresos),
+          backgroundColor: '#185FA5CC',
+          borderColor:     '#185FA5',
+          borderWidth: 2,
+          borderRadius: 6,
+          yAxisID: 'y',
+        },
+        {
+          label: 'Cantidad vendida',
+          data:  graficoData.map(d => d.cantidad),
+          backgroundColor: '#1D9E7566',
+          borderColor:     '#1D9E75',
+          borderWidth: 2,
+          borderRadius: 6,
+          type: 'line',
+          yAxisID: 'y2',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            label: ctx => ctx.datasetIndex === 0
+              ? ` S/${ctx.parsed.y.toFixed(2)}`
+              : ` ${ctx.parsed.y} unidades`
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { font: { size: 11 } } },
+        y:  { position: 'left',  title: { display: true, text: 'Ingresos (S/)' } },
+        y2: { position: 'right', title: { display: true, text: 'Unidades' }, grid: { drawOnChartArea: false } }
+      }
+    }
+  });
+}
+
+function exportar() {
+  const desde = document.getElementById('exp-desde').value;
+  const hasta  = document.getElementById('exp-hasta').value;
+  window.location.href = `/exportar?desde=${desde}&hasta=${hasta}`;
+}
+</script>
+{% endblock %}

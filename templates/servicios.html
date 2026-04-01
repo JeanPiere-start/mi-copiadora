@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block title %}Servicios{% endblock %}
+
+{% block head %}
+<style>
+  .srv-row { display:flex; gap:10px; align-items:center; padding:14px 0;
+             border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .srv-row:last-child { border:none; }
+  .srv-info { flex:1; min-width:150px; }
+  .srv-info .name { font-weight:700; font-size:15px; }
+  .srv-info .cost { font-size:12px; color:var(--muted); }
+  .srv-actions { display:flex; gap:8px; align-items:center; flex-shrink:0; }
+  .price-field { width:90px; font-weight:700; text-align:center; }
+  .toggle-btn { padding:6px 12px; border-radius:8px; border:2px solid; cursor:pointer;
+                font-size:13px; font-weight:600; transition:all .2s; }
+  .toggle-on  { border-color:var(--green); color:var(--green); background:#F0FFF8; }
+  .toggle-on:hover  { background:var(--green); color:#fff; }
+  .toggle-off { border-color:#9CA3AF; color:#9CA3AF; background:#F9FAFB; }
+  .toggle-off:hover { background:#6B7280; color:#fff; border-color:#6B7280; }
+  .save-btn { padding:6px 12px; border-radius:8px; border:none; cursor:pointer;
+              background:var(--blue); color:#fff; font-size:13px; font-weight:600;
+              transition:all .2s; }
+  .save-btn:hover { filter:brightness(1.1); }
+  .margen { font-size:12px; font-weight:700; padding:3px 8px; border-radius:20px; }
+  .margen-good { background:#D1FAE5; color:#065F46; }
+  .margen-warn { background:#FFFBEB; color:#92400E; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2 style="font-size:19px;font-weight:800;color:var(--blue);margin-bottom:4px">⚙️ Gestión de servicios</h2>
+<p class="text-muted" style="margin-bottom:16px;font-size:13px">
+  Edita precios y costos, y activa o desactiva servicios. Los desactivados no aparecen en ventas.
+</p>
+
+<div class="card">
+  {% for s in servicios %}
+  {% set margen = ((s.precio - s.costo_real) / s.precio * 100) if s.precio > 0 else 0 %}
+  <div class="srv-row" id="row-{{ s.id }}">
+    <div class="srv-info">
+      <div class="name">
+        {% if not s.activo %}<span style="opacity:.45">🚫</span>{% endif %}
+        {{ s.nombre }}
+      </div>
+      <div class="cost">Costo real: S/{{ "%.3f"|format(s.costo_real) }}
+        <span class="margen {% if margen > 60 %}margen-good{% else %}margen-warn{% endif %}">
+          {{ "%.0f"|format(margen) }}% margen
+        </span>
+      </div>
+    </div>
+
+    <div class="srv-actions">
+      <div>
+        <label style="font-size:11px;color:var(--muted);display:block;text-align:center">Precio</label>
+        <input type="number" class="price-field" id="precio-{{ s.id }}"
+               value="{{ "%.2f"|format(s.precio) }}" step="0.01" min="0">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--muted);display:block;text-align:center">Costo</label>
+        <input type="number" class="price-field" id="costo-{{ s.id }}"
+               value="{{ "%.3f"|format(s.costo_real) }}" step="0.001" min="0">
+      </div>
+      <button class="save-btn" onclick="guardar({{ s.id }})">💾</button>
+      <button class="toggle-btn {{ 'toggle-on' if s.activo else 'toggle-off' }}"
+              id="toggle-{{ s.id }}" onclick="toggle({{ s.id }})">
+        {{ '✓ Activo' if s.activo else '✗ Inactivo' }}
+      </button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="alert alert-warn">
+  💡 <strong>Tip:</strong> Los precios se aplican a las nuevas ventas. Las ventas históricas mantienen
+  el precio original registrado.
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function guardar(id) {
+  const precio = document.getElementById('precio-'+id).value;
+  const costo  = document.getElementById('costo-'+id).value;
+  const fd = new FormData();
+  fd.append('precio',     precio);
+  fd.append('costo_real', costo);
+  const r    = await fetch(`/servicios/editar/${id}`, { method:'POST', body:fd });
+  const data = await r.json();
+  if (data.success) showFlash('✓ Precio actualizado', 'success');
+  else showFlash('Error al guardar', 'error');
+}
+
+async function toggle(id) {
+  const r    = await fetch(`/servicios/toggle/${id}`, { method:'POST' });
+  const data = await r.json();
+  const btn  = document.getElementById('toggle-'+id);
+  if (data.activo) {
+    btn.className = 'toggle-btn toggle-on';
+    btn.textContent = '✓ Activo';
+    showFlash('Servicio activado', 'success');
+  } else {
+    btn.className = 'toggle-btn toggle-off';
+    btn.textContent = '✗ Inactivo';
+    showFlash('Servicio desactivado', 'success');
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,381 @@
+{% extends 'base.html' %}
+{% block title %}Ventas{% endblock %}
+
+{% block head %}
+<style>
+  .srv-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  @media (min-width: 520px) { .srv-grid { grid-template-columns: repeat(3, 1fr); } }
+
+  .srv-btn { padding: 18px 10px; border-radius: 14px; border: 2px solid #DDE3EE;
+             background: var(--card); cursor: pointer; text-align: center;
+             transition: all .2s; display: flex; flex-direction: column;
+             align-items: center; gap: 6px; }
+  .srv-btn:hover, .srv-btn:active { border-color: var(--blue); background: #EEF4FF; }
+  .srv-btn .srv-ico  { font-size: 26px; }
+  .srv-btn .srv-name { font-size: 12px; font-weight: 600; color: var(--text);
+                       line-height: 1.3; }
+  .srv-btn .srv-price { font-size: 15px; font-weight: 800; color: var(--green); }
+
+  .turno-bar { background: linear-gradient(90deg, var(--blue), #0F5FCF);
+               color: #fff; border-radius: var(--radius); padding: 14px 18px;
+               display: flex; justify-content: space-between; align-items: center;
+               margin-bottom: 16px; }
+  .turno-bar .lbl { font-size: 13px; opacity: .85; }
+  .turno-bar .val { font-size: 26px; font-weight: 800; }
+
+  .ultimas-list { list-style: none; }
+  .ultimas-list li { display: flex; justify-content: space-between;
+                     align-items: center; padding: 10px 0;
+                     border-bottom: 1px solid var(--border); font-size: 13px; }
+  .ultimas-list li:last-child { border: none; }
+
+  /* Client search */
+  .cliente-search { position: relative; }
+  .cliente-results { position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+                     background: var(--card); border: 2px solid var(--blue);
+                     border-radius: 10px; box-shadow: var(--shadow);
+                     max-height: 200px; overflow-y: auto; display: none; }
+  .cliente-result-item { padding: 10px 14px; cursor: pointer; font-size: 14px;
+                          border-bottom: 1px solid var(--border); }
+  .cliente-result-item:hover { background: #EEF4FF; }
+  .cliente-result-item:last-child { border: none; }
+  .cliente-selected { background: #D1FAE5; border: 2px solid var(--green);
+                      border-radius: 10px; padding: 8px 12px; font-size: 13px;
+                      display: flex; justify-content: space-between; align-items: center; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Barra de turno -->
+<div class="turno-bar">
+  <div>
+    <div class="lbl">💰 Ingresos del turno</div>
+    <div class="val">S/{{ "%.2f"|format(total_turno) }}</div>
+  </div>
+  <div style="text-align:right">
+    <div class="lbl">Turno de</div>
+    <div style="font-weight:700;font-size:16px">{{ session.nombre }}</div>
+  </div>
+</div>
+
+<!-- Servicios -->
+<div class="card">
+  <div class="card-title">🛎 Selecciona un servicio</div>
+  <div class="srv-grid">
+    {% set iconos = {'Copia B&N texto':'📄','Copia B&N con imagen':'🖼','Copia a color':'🌈',
+                     'Impresión B&N':'🖨','Impresión a color':'🎨','Escaneo':'📷',
+                     'Foto carné (hoja x6)':'📸','Llenado de formulario':'📝'} %}
+    {% for s in servicios %}
+    <button class="srv-btn" onclick="abrirModal({{ s.id }}, '{{ s.nombre|e }}', {{ s.precio }})">
+      <span class="srv-ico">{{ iconos.get(s.nombre, '📋') }}</span>
+      <span class="srv-name">{{ s.nombre }}</span>
+      <span class="srv-price">S/{{ "%.2f"|format(s.precio) }}</span>
+    </button>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Últimas ventas del turno -->
+<div class="card">
+  <div class="card-title">🕑 Últimas ventas del turno</div>
+  {% if ultimas %}
+  <ul class="ultimas-list" id="ultimas-list">
+    {% for v in ultimas %}
+    <li>
+      <span>
+        <strong>{{ v.servicio.nombre }}</strong>
+        <span class="text-muted"> x{{ v.cantidad }}</span>
+        {% if v.cliente %}<span class="badge badge-green">👤 {{ v.cliente.nombre }}</span>{% endif %}
+        {% if v.es_canje %}<span class="badge badge-blue">🎁 Canje</span>{% endif %}
+      </span>
+      <span class="monto">S/{{ "%.2f"|format(v.total) }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-muted text-center">Sin ventas en este turno todavía.</p>
+  {% endif %}
+</div>
+
+<!-- ── MODAL ── -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span id="modal-srv-name">Servicio</span>
+      <button class="modal-close" onclick="cerrarModal()">✕</button>
+    </div>
+
+    <!-- Cliente (opcional) -->
+    <div class="form-group">
+      <label>👤 Cliente (opcional)</label>
+      <div id="cliente-no-sel">
+        <div class="cliente-search">
+          <input type="text" id="cliente-buscar" placeholder="Buscar por nombre o celular…"
+                 oninput="buscarCliente(this.value)" autocomplete="off">
+          <div class="cliente-results" id="cliente-results"></div>
+        </div>
+        <div class="mt-2">
+          <button type="button" class="btn btn-outline btn-sm" onclick="mostrarNuevoCliente()">
+            + Nuevo cliente
+          </button>
+        </div>
+      </div>
+      <div id="cliente-sel" style="display:none">
+        <div class="cliente-selected">
+          <div>
+            <strong id="sel-nombre">—</strong>
+            <span class="text-muted" id="sel-puntos"></span>
+          </div>
+          <button type="button" class="btn btn-sm" style="background:#EEF4FF;color:var(--blue)"
+                  onclick="limpiarCliente()">✕ Quitar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Canje de puntos -->
+    <div id="canje-section" style="display:none" class="alert alert-success mt-2">
+      🎁 Este cliente tiene <strong id="canje-puntos">0</strong> puntos.
+      Con 10 puntos = 1 copia gratis.
+      <button type="button" class="btn btn-success btn-sm mt-2 btn-full"
+              onclick="canjearPuntos()">Canjear 10 puntos → Copia gratis</button>
+    </div>
+
+    <hr>
+
+    <!-- Cantidad -->
+    <div class="form-group">
+      <label>Cantidad</label>
+      <input type="number" id="modal-cant" min="1" value="1"
+             oninput="calcTotal()" style="font-size:24px;font-weight:700;text-align:center">
+    </div>
+
+    <!-- Teclado rápido de cantidades -->
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      {% for q in [1,5,10,20,50,100] %}
+      <button type="button" class="btn btn-outline btn-sm" onclick="setCant({{ q }})">{{ q }}</button>
+      {% endfor %}
+    </div>
+
+    <div class="form-group">
+      <label>Total a cobrar</label>
+      <div style="font-size:32px;font-weight:900;color:var(--green);text-align:center"
+           id="modal-total">S/0.00</div>
+    </div>
+
+    <button class="btn btn-success btn-full" id="btn-registrar" onclick="registrarVenta()">
+      ✓ Registrar venta
+    </button>
+  </div>
+</div>
+
+<!-- Modal nuevo cliente -->
+<div class="modal-overlay" id="modal-nuevo-cli">
+  <div class="modal-box">
+    <div class="modal-title">
+      Nuevo cliente
+      <button class="modal-close" onclick="cerrarNuevoCli()">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Nombre</label>
+      <input type="text" id="nc-nombre" placeholder="Nombre completo">
+    </div>
+    <div class="form-group">
+      <label>Celular (opcional)</label>
+      <input type="tel" id="nc-celular" placeholder="999 000 000">
+    </div>
+    <button class="btn btn-success btn-full" onclick="guardarNuevoCliente()">
+      Guardar cliente
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let modalSrvId    = null;
+let modalSrvPrecio= 0;
+let clienteId     = null;
+
+function abrirModal(id, nombre, precio) {
+  modalSrvId     = id;
+  modalSrvPrecio = precio;
+  document.getElementById('modal-srv-name').textContent = nombre;
+  document.getElementById('modal-cant').value = 1;
+  limpiarCliente();
+  calcTotal();
+  document.getElementById('modal').classList.add('open');
+  setTimeout(() => document.getElementById('modal-cant').focus(), 200);
+}
+
+function cerrarModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+function setCant(n) {
+  document.getElementById('modal-cant').value = n;
+  calcTotal();
+}
+
+function calcTotal() {
+  const cant  = parseInt(document.getElementById('modal-cant').value) || 0;
+  const total = (cant * modalSrvPrecio).toFixed(2);
+  document.getElementById('modal-total').textContent = 'S/' + total;
+}
+
+// ── CLIENTE ──────────────────────────────────────
+
+let buscarTimeout = null;
+function buscarCliente(q) {
+  clearTimeout(buscarTimeout);
+  if (q.length < 2) { document.getElementById('cliente-results').style.display='none'; return; }
+  buscarTimeout = setTimeout(async () => {
+    const r = await fetch(`/crm/buscar?q=${encodeURIComponent(q)}`);
+    const data = await r.json();
+    const box  = document.getElementById('cliente-results');
+    box.innerHTML = data.length
+      ? data.map(c =>
+          `<div class="cliente-result-item" onclick="seleccionarCliente(${c.id},'${c.nombre.replace(/'/g,"\\'")}',${c.puntos})">
+             <strong>${c.nombre}</strong>
+             ${c.celular ? `<span class="text-muted"> · ${c.celular}</span>` : ''}
+             <span class="badge badge-blue">${c.puntos} pts</span>
+           </div>`).join('')
+      : `<div class="cliente-result-item text-muted">No encontrado</div>`;
+    box.style.display = 'block';
+  }, 300);
+}
+
+function seleccionarCliente(id, nombre, puntos) {
+  clienteId = id;
+  document.getElementById('sel-nombre').textContent = nombre;
+  document.getElementById('sel-puntos').textContent = ` · ${puntos} puntos`;
+  document.getElementById('cliente-no-sel').style.display = 'none';
+  document.getElementById('cliente-sel').style.display    = 'block';
+  document.getElementById('cliente-results').style.display= 'none';
+  document.getElementById('cliente-buscar').value = '';
+
+  const cs = document.getElementById('canje-section');
+  if (puntos >= 10) {
+    document.getElementById('canje-puntos').textContent = puntos;
+    cs.style.display = 'block';
+  } else { cs.style.display = 'none'; }
+}
+
+function limpiarCliente() {
+  clienteId = null;
+  document.getElementById('cliente-no-sel').style.display = 'block';
+  document.getElementById('cliente-sel').style.display    = 'none';
+  document.getElementById('cliente-buscar').value         = '';
+  document.getElementById('cliente-results').style.display= 'none';
+  document.getElementById('canje-section').style.display  = 'none';
+}
+
+// ── CANJE ────────────────────────────────────────
+
+async function canjearPuntos() {
+  if (!clienteId) return;
+  const fd = new FormData();
+  fd.append('cliente_id', clienteId);
+  const r    = await fetch('/ventas/canjear', { method:'POST', body: fd });
+  const data = await r.json();
+  if (data.success) {
+    showFlash(`🎁 Canje exitoso. Puntos restantes: ${data.puntos_restantes}`, 'success');
+    agregarUltimaVenta('Copia gratis (canje)', 1, 0);
+    cerrarModal();
+  } else {
+    showFlash(data.error, 'error');
+  }
+}
+
+// ── REGISTRAR VENTA ──────────────────────────────
+
+async function registrarVenta() {
+  const cant = parseInt(document.getElementById('modal-cant').value);
+  if (!cant || cant <= 0) { showFlash('Ingresa una cantidad válida', 'error'); return; }
+
+  const btn = document.getElementById('btn-registrar');
+  btn.disabled = true; btn.textContent = 'Registrando…';
+
+  const fd = new FormData();
+  fd.append('servicio_id', modalSrvId);
+  fd.append('cantidad',    cant);
+  if (clienteId) fd.append('cliente_id', clienteId);
+
+  try {
+    const r    = await fetch('/ventas/registrar', { method:'POST', body: fd });
+    const data = await r.json();
+    if (data.success) {
+      const total = parseFloat(data.total);
+      // Actualizar total del turno
+      const barVal = document.querySelector('.turno-bar .val');
+      const actual = parseFloat(barVal.textContent.replace('S/','')) + total;
+      barVal.textContent = 'S/' + actual.toFixed(2);
+
+      agregarUltimaVenta(data.servicio, data.cantidad, total);
+
+      let msg = `✓ ${data.servicio} x${data.cantidad} = S/${total.toFixed(2)}`;
+      if (data.puntos_ganados > 0)
+        msg += ` | +${data.puntos_ganados} puntos al cliente`;
+      showFlash(msg, 'success');
+      cerrarModal();
+    } else {
+      showFlash(data.error || 'Error al registrar', 'error');
+    }
+  } catch(e) {
+    showFlash('Error de conexión', 'error');
+  }
+  btn.disabled = false; btn.textContent = '✓ Registrar venta';
+}
+
+function agregarUltimaVenta(nombre, cant, total) {
+  const ul = document.getElementById('ultimas-list');
+  if (!ul) {
+    // si no existe, recargar la página para mostrar la lista
+    return;
+  }
+  const li = document.createElement('li');
+  li.innerHTML = `<span><strong>${nombre}</strong><span class="text-muted"> x${cant}</span></span>
+                  <span class="monto">S/${total.toFixed(2)}</span>`;
+  ul.insertBefore(li, ul.firstChild);
+  if (ul.children.length > 5) ul.lastChild.remove();
+}
+
+// ── NUEVO CLIENTE ────────────────────────────────
+
+function mostrarNuevoCliente() {
+  document.getElementById('modal-nuevo-cli').classList.add('open');
+}
+function cerrarNuevoCli() {
+  document.getElementById('modal-nuevo-cli').classList.remove('open');
+}
+
+async function guardarNuevoCliente() {
+  const nombre  = document.getElementById('nc-nombre').value.trim();
+  const celular = document.getElementById('nc-celular').value.trim();
+  if (!nombre) { showFlash('El nombre es requerido', 'error'); return; }
+
+  const fd = new FormData();
+  fd.append('nombre',  nombre);
+  fd.append('celular', celular);
+
+  const r    = await fetch('/crm/cliente/nuevo', { method:'POST', body: fd });
+  const data = await r.json();
+  if (data.id) {
+    showFlash(`Cliente "${data.nombre}" creado`, 'success');
+    cerrarNuevoCli();
+    seleccionarCliente(data.id, data.nombre, 0);
+    document.getElementById('nc-nombre').value  = '';
+    document.getElementById('nc-celular').value = '';
+  } else {
+    showFlash(data.error || 'Error', 'error');
+  }
+}
+
+// Cerrar modal al hacer clic fuera
+document.getElementById('modal').addEventListener('click', function(e) {
+  if (e.target === this) cerrarModal();
+});
+document.getElementById('modal-nuevo-cli').addEventListener('click', function(e) {
+  if (e.target === this) cerrarNuevoCli();
+});
+</script>
+{% endblock %}
