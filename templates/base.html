@@ -190,6 +190,7 @@
   <a href="{{ url_for('inventario') }}" class="navtab {% if request.endpoint=='inventario'%}active{% endif %}"><span class="ico">📦</span> Inventario</a>
   <a href="{{ url_for('servicios') }}"  class="navtab {% if request.endpoint=='servicios' %}active{% endif %}"><span class="ico">⚙️</span> Servicios</a>
   <a href="{{ url_for('crm') }}"        class="navtab {% if request.endpoint in ('crm','ver_cliente') %}active{% endif %}"><span class="ico">👥</span> CRM</a>
+  <a href="{{ url_for('usuarios') }}"    class="navtab {% if request.endpoint in ('usuarios',) %}active{% endif %}"><span class="ico">👤</span> Usuarios</a>
   {% endif %}
 </nav>
 {% endif %}
