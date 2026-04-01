@@ -210,15 +210,23 @@ def ping():
 def login():
     error = None
     if request.method == 'POST':
-        pin = request.form.get('pin', '')
-        for u in Usuario.query.filter_by(activo=True).all():
-            if check_password_hash(u.pin, pin):
-                session.permanent = True
-                session['usuario_id'] = u.id
-                session['nombre']     = u.nombre
-                session['rol']        = u.rol
-                return redirect(url_for('panel') if u.rol == 'admin' else url_for('ventas'))
-        error = 'PIN incorrecto. Intenta de nuevo.'
+        nombre_ingresado = request.form.get('nombre', '').strip().lower()
+        pin              = request.form.get('pin', '')
+        if not nombre_ingresado:
+            error = 'Ingresa tu nombre de usuario.'
+        else:
+            usuario = Usuario.query.filter(
+                db.func.lower(Usuario.nombre) == nombre_ingresado,
+                Usuario.activo == True
+            ).first()
+            if usuario and check_password_hash(usuario.pin, pin):
+                session.permanent     = True
+                session['usuario_id'] = usuario.id
+                session['nombre']     = usuario.nombre
+                session['rol']        = usuario.rol
+                return redirect(url_for('panel') if usuario.rol == 'admin' else url_for('ventas'))
+            else:
+                error = 'Usuario o PIN incorrecto. Intenta de nuevo.'
     return render_template('login.html', error=error)
 
 
@@ -490,6 +498,106 @@ def toggle_servicio(id):
     s.activo = not s.activo
     db.session.commit()
     return jsonify({'activo': s.activo})
+
+
+
+# ============================================================
+# GESTIÓN DE USUARIOS  (solo admin)
+# ============================================================
+
+@app.route('/usuarios')
+@admin_required
+def usuarios():
+    lista = Usuario.query.order_by(Usuario.id).all()
+    return render_template('usuarios.html', usuarios=lista)
+
+
+@app.route('/usuarios/nuevo', methods=['POST'])
+@admin_required
+def nuevo_usuario():
+    nombre = request.form.get('nombre', '').strip()
+    pin    = request.form.get('pin', '').strip()
+    rol    = request.form.get('rol', 'apoyo')
+
+    if not nombre or not pin:
+        return jsonify({'error': 'Nombre y PIN son requeridos'}), 400
+    if len(pin) < 4 or not pin.isdigit():
+        return jsonify({'error': 'El PIN debe ser numérico de al menos 4 dígitos'}), 400
+    if Usuario.query.filter(db.func.lower(Usuario.nombre) == nombre.lower()).first():
+        return jsonify({'error': f'Ya existe un usuario con el nombre "{nombre}"'}), 400
+    if rol not in ('admin', 'apoyo'):
+        rol = 'apoyo'
+
+    u = Usuario(nombre=nombre, pin=generate_password_hash(pin), rol=rol)
+    db.session.add(u)
+    db.session.commit()
+    return jsonify({'id': u.id, 'nombre': u.nombre, 'rol': u.rol})
+
+
+@app.route('/usuarios/eliminar/<int:id>', methods=['POST'])
+@admin_required
+def eliminar_usuario(id):
+    if id == session.get('usuario_id'):
+        return jsonify({'error': 'No puedes eliminar tu propio usuario'}), 400
+    u = Usuario.query.get_or_404(id)
+    # Si tiene ventas, solo desactivar; si no, eliminar físicamente
+    if u.ventas:
+        u.activo = False
+        db.session.commit()
+        return jsonify({'accion': 'desactivado', 'nombre': u.nombre})
+    else:
+        db.session.delete(u)
+        db.session.commit()
+        return jsonify({'accion': 'eliminado', 'nombre': u.nombre})
+
+
+@app.route('/usuarios/toggle/<int:id>', methods=['POST'])
+@admin_required
+def toggle_usuario(id):
+    if id == session.get('usuario_id'):
+        return jsonify({'error': 'No puedes desactivarte a ti mismo'}), 400
+    u        = Usuario.query.get_or_404(id)
+    u.activo = not u.activo
+    db.session.commit()
+    return jsonify({'activo': u.activo, 'nombre': u.nombre})
+
+@app.route('/servicios/nuevo', methods=['POST'])
+@admin_required
+def nuevo_servicio():
+    nombre     = request.form.get('nombre', '').strip()
+    precio     = request.form.get('precio',     type=float)
+    costo_real = request.form.get('costo_real', type=float)
+
+    if not nombre:
+        return jsonify({'error': 'El nombre es requerido'}), 400
+    if precio is None or precio < 0:
+        return jsonify({'error': 'El precio no es válido'}), 400
+    if costo_real is None or costo_real < 0:
+        costo_real = 0.0
+
+    s = Servicio(nombre=nombre, precio=precio, costo_real=costo_real, activo=True)
+    db.session.add(s)
+    db.session.commit()
+    margen = ((precio - costo_real) / precio * 100) if precio > 0 else 0
+    return jsonify({'id': s.id, 'nombre': s.nombre, 'precio': s.precio,
+                    'costo_real': s.costo_real, 'margen': round(margen, 1)})
+
+
+@app.route('/servicios/eliminar/<int:id>', methods=['POST'])
+@admin_required
+def eliminar_servicio(id):
+    s = Servicio.query.get_or_404(id)
+    if s.ventas:
+        # Tiene historial: solo desactivar para preservar datos
+        s.activo = False
+        db.session.commit()
+        return jsonify({'accion': 'desactivado', 'nombre': s.nombre})
+    else:
+        db.session.delete(s)
+        db.session.commit()
+        return jsonify({'accion': 'eliminado', 'nombre': s.nombre})
+
+
 
 
 # ============================================================
