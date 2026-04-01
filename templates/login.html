@@ -9,103 +9,138 @@
     body { min-height: 100vh; background: linear-gradient(135deg, #185FA5 0%, #0F3D70 100%);
            display: flex; align-items: center; justify-content: center;
            font-family: 'Segoe UI', system-ui, sans-serif; padding: 20px; }
-
     .login-card { background: #fff; border-radius: 20px;
-                  padding: 36px 28px; width: 100%; max-width: 360px;
+                  padding: 32px 28px; width: 100%; max-width: 360px;
                   box-shadow: 0 20px 60px rgba(0,0,0,.3); text-align: center; }
-
-    .login-logo { font-size: 52px; margin-bottom: 6px; }
+    .login-logo  { font-size: 50px; margin-bottom: 4px; }
     .login-title { font-size: 22px; font-weight: 800; color: #185FA5; }
-    .login-sub   { font-size: 13px; color: #6B7280; margin-bottom: 24px; }
-
-    .pin-display { display: flex; justify-content: center; gap: 12px;
-                   margin-bottom: 20px; }
+    .login-sub   { font-size: 13px; color: #6B7280; margin-bottom: 22px; }
+    .nombre-wrap label { display: block; font-size: 13px; font-weight: 600;
+                         color: #6B7280; margin-bottom: 6px; text-align: left; }
+    .nombre-wrap input { width: 100%; padding: 12px 16px; font-size: 17px;
+                         border: 2px solid #DDE3EE; border-radius: 12px;
+                         outline: none; transition: border .2s; text-align: center; }
+    .nombre-wrap input:focus { border-color: #185FA5; }
+    .btn-continuar { width: 100%; margin-top: 14px; padding: 13px;
+                     background: #185FA5; color: #fff; border: none;
+                     border-radius: 12px; font-size: 16px; font-weight: 700;
+                     cursor: pointer; }
+    .btn-continuar:hover { filter: brightness(1.1); }
+    .usuario-chip { display: flex; align-items: center; justify-content: space-between;
+                    background: #EEF4FF; border: 2px solid #185FA5; border-radius: 12px;
+                    padding: 10px 14px; margin-bottom: 16px; }
+    .usuario-chip .name { font-weight: 700; color: #185FA5; font-size: 16px; }
+    .btn-cambiar { background: none; border: none; color: #9CA3AF; cursor: pointer;
+                   font-size: 13px; text-decoration: underline; }
+    .pin-display { display: flex; justify-content: center; gap: 12px; margin-bottom: 18px; }
     .pin-dot { width: 18px; height: 18px; border-radius: 50%;
-               border: 2.5px solid #185FA5; background: transparent;
-               transition: background .15s; }
+               border: 2.5px solid #185FA5; background: transparent; transition: background .15s; }
     .pin-dot.filled { background: #185FA5; }
-
-    .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
-              margin-bottom: 18px; }
-    .key { padding: 16px; border: 2px solid #DDE3EE; border-radius: 12px;
+    .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+    .key { padding: 15px; border: 2px solid #DDE3EE; border-radius: 12px;
            background: #F8FAFF; font-size: 20px; font-weight: 700; color: #1A202C;
            cursor: pointer; transition: all .15s; user-select: none; }
     .key:active, .key:hover { background: #185FA5; color: #fff; border-color: #185FA5; }
-    .key-del  { background: #FFF0F0; border-color: #FFC0C0; color: #E53E3E; }
+    .key-del { background: #FFF0F0; border-color: #FFC0C0; color: #E53E3E; }
     .key-del:hover, .key-del:active { background: #E53E3E; color: #fff; border-color: #E53E3E; }
-    .key-ok   { background: #1D9E75; color: #fff; border-color: #1D9E75; }
-    .key-ok:hover, .key-ok:active { filter: brightness(1.1); }
-
+    .key-ok { background: #1D9E75; color: #fff; border-color: #1D9E75; }
     .error-msg { background: #FFF0F0; border: 1px solid #FFC0C0; color: #9B1C1C;
-                 padding: 10px; border-radius: 10px; font-size: 13px; margin-bottom: 16px; }
-
-    /* Hidden input */
-    #pin-input { position: absolute; opacity: 0; pointer-events: none; }
+                 padding: 10px; border-radius: 10px; font-size: 13px; margin-bottom: 14px; }
   </style>
 </head>
 <body>
 <div class="login-card">
   <div class="login-logo">🖨️</div>
   <div class="login-title">Mi Copiadora</div>
-  <div class="login-sub">Ingresa tu PIN de 4 dígitos</div>
+  <div class="login-sub">Inicia sesión con tu usuario y PIN</div>
 
   {% if error %}
   <div class="error-msg">⚠️ {{ error }}</div>
   {% endif %}
 
-  <div class="pin-display">
-    <div class="pin-dot" id="d0"></div>
-    <div class="pin-dot" id="d1"></div>
-    <div class="pin-dot" id="d2"></div>
-    <div class="pin-dot" id="d3"></div>
-  </div>
-
   <form method="POST" id="login-form">
-    <input type="password" id="pin-input" name="pin" maxlength="4" autocomplete="off">
-    <div class="keypad">
-      {% for n in [1,2,3,4,5,6,7,8,9] %}
-      <button type="button" class="key" onclick="addDigit('{{ n }}')">{{ n }}</button>
-      {% endfor %}
-      <button type="button" class="key key-del" onclick="delDigit()">⌫</button>
-      <button type="button" class="key" onclick="addDigit('0')">0</button>
-      <button type="button" class="key key-ok" onclick="submitPin()">✓</button>
+    <input type="hidden" id="pin-hidden" name="pin">
+    <input type="hidden" id="nombre-hidden" name="nombre">
+
+    <div id="paso1">
+      <div class="nombre-wrap">
+        <label>Tu nombre de usuario</label>
+        <input type="text" id="nombre-input" placeholder="Ej: Admin, María…"
+               autocomplete="off" autocapitalize="words">
+      </div>
+      <button type="button" class="btn-continuar" onclick="continuar()">Continuar →</button>
+    </div>
+
+    <div id="paso2" style="display:none">
+      <div class="usuario-chip">
+        <span class="name" id="chip-nombre">—</span>
+        <button type="button" class="btn-cambiar" onclick="volver()">Cambiar</button>
+      </div>
+      <div class="pin-display">
+        <div class="pin-dot" id="d0"></div>
+        <div class="pin-dot" id="d1"></div>
+        <div class="pin-dot" id="d2"></div>
+        <div class="pin-dot" id="d3"></div>
+      </div>
+      <div class="keypad">
+        <button type="button" class="key" onclick="addDigit('1')">1</button>
+        <button type="button" class="key" onclick="addDigit('2')">2</button>
+        <button type="button" class="key" onclick="addDigit('3')">3</button>
+        <button type="button" class="key" onclick="addDigit('4')">4</button>
+        <button type="button" class="key" onclick="addDigit('5')">5</button>
+        <button type="button" class="key" onclick="addDigit('6')">6</button>
+        <button type="button" class="key" onclick="addDigit('7')">7</button>
+        <button type="button" class="key" onclick="addDigit('8')">8</button>
+        <button type="button" class="key" onclick="addDigit('9')">9</button>
+        <button type="button" class="key key-del" onclick="delDigit()">⌫</button>
+        <button type="button" class="key" onclick="addDigit('0')">0</button>
+        <button type="button" class="key key-ok" onclick="submitPin()">✓</button>
+      </div>
     </div>
   </form>
 </div>
-
 <script>
-const input = document.getElementById('pin-input');
-const dots  = [0,1,2,3].map(i => document.getElementById('d'+i));
-let pin     = '';
+const dots = [0,1,2,3].map(i => document.getElementById('d'+i));
+let pin = '', nombreVal = '';
 
-function updateDots() {
-  dots.forEach((d, i) => d.classList.toggle('filled', i < pin.length));
+{% if error %}
+const _ng = '{{ request.form.get("nombre", "")|e }}';
+if (_ng) { document.getElementById('nombre-input').value = _ng; continuar(true); }
+{% endif %}
+
+function continuar(forzar) {
+  const v = document.getElementById('nombre-input').value.trim();
+  if (!v && !forzar) {
+    document.getElementById('nombre-input').style.borderColor = '#E53E3E';
+    return;
+  }
+  nombreVal = v;
+  document.getElementById('chip-nombre').textContent = nombreVal;
+  document.getElementById('paso1').style.display = 'none';
+  document.getElementById('paso2').style.display = 'block';
+  pin = ''; updateDots();
 }
-
-function addDigit(d) {
-  if (pin.length < 4) {
-    pin += d;
-    input.value = pin;
-    updateDots();
-    if (pin.length === 4) submitPin();
+function volver() {
+  document.getElementById('paso1').style.display = 'block';
+  document.getElementById('paso2').style.display = 'none';
+  pin = ''; updateDots();
+}
+function updateDots() { dots.forEach((d,i) => d.classList.toggle('filled', i < pin.length)); }
+function addDigit(d) { if (pin.length < 4) { pin += d; updateDots(); if (pin.length===4) submitPin(); } }
+function delDigit()  { pin = pin.slice(0,-1); updateDots(); }
+function submitPin() {
+  if (pin.length === 4) {
+    document.getElementById('pin-hidden').value    = pin;
+    document.getElementById('nombre-hidden').value = nombreVal;
+    document.getElementById('login-form').submit();
   }
 }
-
-function delDigit() {
-  pin = pin.slice(0, -1);
-  input.value = pin;
-  updateDots();
-}
-
-function submitPin() {
-  if (pin.length === 4) document.getElementById('login-form').submit();
-}
-
-// Teclado físico también
 document.addEventListener('keydown', e => {
-  if (e.key >= '0' && e.key <= '9') addDigit(e.key);
-  else if (e.key === 'Backspace') delDigit();
-  else if (e.key === 'Enter') submitPin();
+  if (document.getElementById('paso2').style.display !== 'none') {
+    if (e.key>='0'&&e.key<='9') addDigit(e.key);
+    else if (e.key==='Backspace') delDigit();
+    else if (e.key==='Enter') submitPin();
+  } else if (e.key==='Enter') continuar();
 });
 </script>
 </body>
