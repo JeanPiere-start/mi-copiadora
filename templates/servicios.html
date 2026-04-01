@@ -18,22 +18,29 @@
   .toggle-off { border-color:#9CA3AF; color:#9CA3AF; background:#F9FAFB; }
   .toggle-off:hover { background:#6B7280; color:#fff; border-color:#6B7280; }
   .save-btn { padding:6px 12px; border-radius:8px; border:none; cursor:pointer;
-              background:var(--blue); color:#fff; font-size:13px; font-weight:600;
-              transition:all .2s; }
-  .save-btn:hover { filter:brightness(1.1); }
+              background:var(--blue); color:#fff; font-size:13px; font-weight:600; }
+  .del-btn  { padding:6px 10px; border-radius:8px; border:2px solid #FCA5A5; cursor:pointer;
+              background:#FEE2E2; color:#991B1B; font-size:13px; font-weight:600; }
   .margen { font-size:12px; font-weight:700; padding:3px 8px; border-radius:20px; }
   .margen-good { background:#D1FAE5; color:#065F46; }
   .margen-warn { background:#FFFBEB; color:#92400E; }
+  .nuevo-badge { background:#D1FAE5; color:#065F46; font-size:10px; font-weight:700;
+                 padding:2px 7px; border-radius:20px; margin-left:6px; }
 </style>
 {% endblock %}
 
 {% block content %}
-<h2 style="font-size:19px;font-weight:800;color:var(--blue);margin-bottom:4px">⚙️ Gestión de servicios</h2>
+<div class="flex justify-between items-center" style="margin-bottom:4px;flex-wrap:wrap;gap:10px">
+  <h2 style="font-size:19px;font-weight:800;color:var(--blue)">⚙️ Servicios</h2>
+  <button class="btn btn-success" onclick="document.getElementById('modal-nuevo').classList.add('open')">
+    + Agregar servicio
+  </button>
+</div>
 <p class="text-muted" style="margin-bottom:16px;font-size:13px">
-  Edita precios y costos, y activa o desactiva servicios. Los desactivados no aparecen en ventas.
+  Edita precios, activa/desactiva servicios, o agrega nuevos (stickers, micas, recargas, etc.)
 </p>
 
-<div class="card">
+<div class="card" id="lista-servicios">
   {% for s in servicios %}
   {% set margen = ((s.precio - s.costo_real) / s.precio * 100) if s.precio > 0 else 0 %}
   <div class="srv-row" id="row-{{ s.id }}">
@@ -42,13 +49,13 @@
         {% if not s.activo %}<span style="opacity:.45">🚫</span>{% endif %}
         {{ s.nombre }}
       </div>
-      <div class="cost">Costo real: S/{{ "%.3f"|format(s.costo_real) }}
+      <div class="cost">
+        Costo: S/{{ "%.3f"|format(s.costo_real) }}
         <span class="margen {% if margen > 60 %}margen-good{% else %}margen-warn{% endif %}">
           {{ "%.0f"|format(margen) }}% margen
         </span>
       </div>
     </div>
-
     <div class="srv-actions">
       <div>
         <label style="font-size:11px;color:var(--muted);display:block;text-align:center">Precio</label>
@@ -62,22 +69,130 @@
       </div>
       <button class="save-btn" onclick="guardar({{ s.id }})">💾</button>
       <button class="toggle-btn {{ 'toggle-on' if s.activo else 'toggle-off' }}"
-              id="toggle-{{ s.id }}" onclick="toggle({{ s.id }})">
+              id="toggle-{{ s.id }}" onclick="toggleSrv({{ s.id }})">
         {{ '✓ Activo' if s.activo else '✗ Inactivo' }}
       </button>
+      <button class="del-btn" onclick="eliminarSrv({{ s.id }}, '{{ s.nombre|e }}')">🗑</button>
     </div>
   </div>
   {% endfor %}
 </div>
 
 <div class="alert alert-warn">
-  💡 <strong>Tip:</strong> Los precios se aplican a las nuevas ventas. Las ventas históricas mantienen
-  el precio original registrado.
+  💡 Si un servicio tiene ventas registradas y lo eliminas, se desactivará en vez de borrarse
+  para no perder el historial. Si no tiene ventas, se elimina por completo.
+</div>
+
+<!-- Modal nuevo servicio -->
+<div class="modal-overlay" id="modal-nuevo">
+  <div class="modal-box">
+    <div class="modal-title">
+      Agregar nuevo servicio
+      <button class="modal-close" onclick="cerrarModal()">✕</button>
+    </div>
+
+    <div class="form-group">
+      <label>Nombre del servicio *</label>
+      <input type="text" id="ns-nombre"
+             placeholder="Ej: Sticker personalizado, Mica A4, Recarga Bitel…">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label>Precio de venta (S/) *</label>
+        <input type="number" id="ns-precio" placeholder="Ej: 1.50" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Costo real (S/)</label>
+        <input type="number" id="ns-costo" placeholder="Ej: 0.50" step="0.01" min="0" value="0">
+      </div>
+    </div>
+
+    <div id="ns-margen-preview" style="display:none" class="alert alert-success">
+      📊 Margen estimado: <strong id="ns-margen-val">—</strong>
+    </div>
+
+    <button class="btn btn-success btn-full" onclick="crearServicio()">✓ Agregar servicio</button>
+  </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+function cerrarModal() {
+  document.getElementById('modal-nuevo').classList.remove('open');
+}
+
+// Preview del margen al escribir precio/costo
+['ns-precio','ns-costo'].forEach(id =>
+  document.getElementById(id).addEventListener('input', previewMargen)
+);
+
+function previewMargen() {
+  const p = parseFloat(document.getElementById('ns-precio').value) || 0;
+  const c = parseFloat(document.getElementById('ns-costo').value)  || 0;
+  const box = document.getElementById('ns-margen-preview');
+  if (p > 0) {
+    const m = ((p - c) / p * 100).toFixed(1);
+    document.getElementById('ns-margen-val').textContent = m + '%';
+    box.style.display = 'block';
+    box.className = 'alert ' + (parseFloat(m) > 40 ? 'alert-success' : 'alert-warn');
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+async function crearServicio() {
+  const nombre = document.getElementById('ns-nombre').value.trim();
+  const precio = document.getElementById('ns-precio').value;
+  const costo  = document.getElementById('ns-costo').value  || '0';
+
+  if (!nombre) { showFlash('El nombre es requerido', 'error'); return; }
+  if (!precio || parseFloat(precio) < 0) { showFlash('Ingresa un precio válido', 'error'); return; }
+
+  const fd = new FormData();
+  fd.append('nombre',     nombre);
+  fd.append('precio',     precio);
+  fd.append('costo_real', costo);
+
+  const r    = await fetch('/servicios/nuevo', { method: 'POST', body: fd });
+  const data = await r.json();
+
+  if (data.id) {
+    showFlash(`✓ Servicio "${data.nombre}" agregado`, 'success');
+    cerrarModal();
+    // Agregar fila sin recargar
+    const lista = document.getElementById('lista-servicios');
+    const div   = document.createElement('div');
+    div.className  = 'srv-row';
+    div.id         = 'row-' + data.id;
+    div.innerHTML  = `
+      <div class="srv-info">
+        <div class="name">${data.nombre} <span class="nuevo-badge">NUEVO</span></div>
+        <div class="cost">Costo: S/${parseFloat(data.costo_real).toFixed(3)}
+          <span class="margen ${data.margen > 60 ? 'margen-good' : 'margen-warn'}">${data.margen}% margen</span>
+        </div>
+      </div>
+      <div class="srv-actions">
+        <div><label style="font-size:11px;color:var(--muted);display:block;text-align:center">Precio</label>
+          <input type="number" class="price-field" id="precio-${data.id}" value="${parseFloat(data.precio).toFixed(2)}" step="0.01" min="0">
+        </div>
+        <div><label style="font-size:11px;color:var(--muted);display:block;text-align:center">Costo</label>
+          <input type="number" class="price-field" id="costo-${data.id}" value="${parseFloat(data.costo_real).toFixed(3)}" step="0.001" min="0">
+        </div>
+        <button class="save-btn" onclick="guardar(${data.id})">💾</button>
+        <button class="toggle-btn toggle-on" id="toggle-${data.id}" onclick="toggleSrv(${data.id})">✓ Activo</button>
+        <button class="del-btn" onclick="eliminarSrv(${data.id}, '${data.nombre.replace(/'/g,"\\'")}')">🗑</button>
+      </div>`;
+    lista.appendChild(div);
+    document.getElementById('ns-nombre').value = '';
+    document.getElementById('ns-precio').value = '';
+    document.getElementById('ns-costo').value  = '0';
+    document.getElementById('ns-margen-preview').style.display = 'none';
+  } else {
+    showFlash(data.error || 'Error al crear servicio', 'error');
+  }
+}
+
 async function guardar(id) {
   const precio = document.getElementById('precio-'+id).value;
   const costo  = document.getElementById('costo-'+id).value;
@@ -90,19 +205,38 @@ async function guardar(id) {
   else showFlash('Error al guardar', 'error');
 }
 
-async function toggle(id) {
+async function toggleSrv(id) {
   const r    = await fetch(`/servicios/toggle/${id}`, { method:'POST' });
   const data = await r.json();
   const btn  = document.getElementById('toggle-'+id);
   if (data.activo) {
-    btn.className = 'toggle-btn toggle-on';
+    btn.className   = 'toggle-btn toggle-on';
     btn.textContent = '✓ Activo';
     showFlash('Servicio activado', 'success');
   } else {
-    btn.className = 'toggle-btn toggle-off';
+    btn.className   = 'toggle-btn toggle-off';
     btn.textContent = '✗ Inactivo';
     showFlash('Servicio desactivado', 'success');
   }
 }
+
+async function eliminarSrv(id, nombre) {
+  if (!confirm(`¿Eliminar el servicio "${nombre}"?\n\nSi tiene ventas registradas se desactivará, si no las tiene se eliminará.`)) return;
+  const r    = await fetch(`/servicios/eliminar/${id}`, { method:'POST' });
+  const data = await r.json();
+  if (data.error) { showFlash(data.error, 'error'); return; }
+  if (data.accion === 'eliminado') {
+    document.getElementById('row-'+id).remove();
+    showFlash(`"${data.nombre}" eliminado`, 'success');
+  } else {
+    showFlash(`"${data.nombre}" desactivado (tiene ventas)`, 'success');
+    const btn = document.getElementById('toggle-'+id);
+    if (btn) { btn.className = 'toggle-btn toggle-off'; btn.textContent = '✗ Inactivo'; }
+  }
+}
+
+document.getElementById('modal-nuevo').addEventListener('click', function(e) {
+  if (e.target === this) cerrarModal();
+});
 </script>
 {% endblock %}
