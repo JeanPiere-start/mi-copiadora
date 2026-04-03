@@ -162,26 +162,56 @@
 
     <hr>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-      <div class="form-group" style="margin:0">
-        <label>Precio unitario (S/)</label>
-        <input type="number" id="pers-precio" min="0" step="0.10"
-               placeholder="0.00" oninput="calcTotalPers()"
-               style="font-size:20px;font-weight:700;text-align:center">
+    <!-- Toggle: precio fijo o precio total directo -->
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button type="button" id="toggle-modo-precio" class="btn btn-sm"
+              style="background:#EEF4FF;color:var(--blue);border:2px solid var(--blue)"
+              onclick="toggleModoPrecio()">
+        💰 Modo: Precio × Cantidad
+      </button>
+      <button type="button" id="toggle-hojas" class="btn btn-sm"
+              style="background:#EEF4FF;color:var(--blue);border:2px solid var(--blue)"
+              onclick="toggleHojas()">
+        📄 Usa hojas: Sí
+      </button>
+    </div>
+
+    <!-- Modo precio × cantidad -->
+    <div id="modo-por-cantidad">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
+        <div class="form-group" style="margin:0">
+          <label>Precio unitario (S/)</label>
+          <input type="number" id="pers-precio" min="0" step="0.10"
+                 placeholder="0.00" oninput="calcTotalPers()"
+                 style="font-size:20px;font-weight:700;text-align:center">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label>Cantidad</label>
+          <input type="number" id="pers-cant" min="1" value="1"
+                 oninput="calcTotalPers()"
+                 style="font-size:20px;font-weight:700;text-align:center">
+        </div>
       </div>
-      <div class="form-group" style="margin:0">
-        <label>Cantidad</label>
-        <input type="number" id="pers-cant" min="1" value="1"
-               oninput="calcTotalPers()"
-               style="font-size:20px;font-weight:700;text-align:center">
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+        {% for q in [1,2,5,10,20,50] %}
+        <button type="button" class="btn btn-outline btn-sm" onclick="setPersQ({{ q }})">{{ q }}</button>
+        {% endfor %}
       </div>
     </div>
 
-    <!-- Teclado rápido cantidades -->
-    <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
-      {% for q in [1,2,5,10,20,50] %}
-      <button type="button" class="btn btn-outline btn-sm" onclick="setPersQ({{ q }})">{{ q }}</button>
-      {% endfor %}
+    <!-- Modo total directo -->
+    <div id="modo-total-directo" style="display:none">
+      <div class="form-group">
+        <label>Total a cobrar (S/) — precio y cantidad libres</label>
+        <input type="number" id="pers-total-directo" min="0" step="0.50"
+               placeholder="Ej: 5.00" oninput="syncTotalDirecto()"
+               style="font-size:24px;font-weight:700;text-align:center;color:var(--green)">
+      </div>
+      <div class="form-group">
+        <label>Cantidad <span style="font-weight:400;color:var(--muted)">(para el historial)</span></label>
+        <input type="number" id="pers-cant-directo" min="1" value="1"
+               style="font-size:18px;font-weight:700;text-align:center">
+      </div>
     </div>
 
     <div class="form-group">
@@ -510,11 +540,45 @@ document.getElementById('modal-pers').addEventListener('click', function(e) {
 
 let persClienteId = null;
 
+let persUsaHojas  = true;
+let persModoDirec = false;
+
+function toggleHojas() {
+  persUsaHojas = !persUsaHojas;
+  const btn = document.getElementById('toggle-hojas');
+  btn.textContent = `📄 Usa hojas: ${persUsaHojas ? 'Sí' : 'No'}`;
+  btn.style.background = persUsaHojas ? '#EEF4FF' : '#F3F4F6';
+  btn.style.color      = persUsaHojas ? 'var(--blue)' : 'var(--muted)';
+}
+
+function toggleModoPrecio() {
+  persModoDirec = !persModoDirec;
+  const btn = document.getElementById('toggle-modo-precio');
+  document.getElementById('modo-por-cantidad').style.display  = persModoDirec ? 'none'  : 'block';
+  document.getElementById('modo-total-directo').style.display = persModoDirec ? 'block' : 'none';
+  btn.textContent = persModoDirec ? '💰 Modo: Total directo' : '💰 Modo: Precio × Cantidad';
+  calcTotalPers();
+}
+
+function syncTotalDirecto() {
+  const t = parseFloat(document.getElementById('pers-total-directo').value) || 0;
+  document.getElementById('pers-total').textContent = 'S/' + t.toFixed(2);
+}
+
 function abrirPersonalizada() {
   document.getElementById('pers-desc').value   = '';
   document.getElementById('pers-precio').value = '';
   document.getElementById('pers-cant').value   = '1';
   document.getElementById('pers-total').textContent = 'S/0.00';
+  // Reset toggles
+  persUsaHojas  = true;
+  persModoDirec = false;
+  document.getElementById('toggle-hojas').textContent     = '📄 Usa hojas: Sí';
+  document.getElementById('toggle-hojas').style.background= '#EEF4FF';
+  document.getElementById('toggle-hojas').style.color     = 'var(--blue)';
+  document.getElementById('toggle-modo-precio').textContent = '💰 Modo: Precio × Cantidad';
+  document.getElementById('modo-por-cantidad').style.display  = 'block';
+  document.getElementById('modo-total-directo').style.display = 'none';
   limpiarClientePers();
   document.getElementById('modal-pers').classList.add('open');
   setTimeout(() => document.getElementById('pers-desc').focus(), 200);
@@ -574,13 +638,21 @@ function limpiarClientePers() {
 }
 
 async function registrarPersonalizada() {
-  const desc   = document.getElementById('pers-desc').value.trim();
-  const precio = parseFloat(document.getElementById('pers-precio').value);
-  const cant   = parseInt(document.getElementById('pers-cant').value);
+  const desc = document.getElementById('pers-desc').value.trim();
+  if (!desc) { showFlash('Describe el servicio o producto', 'error'); return; }
 
-  if (!desc)           { showFlash('Describe el servicio o producto', 'error'); return; }
-  if (isNaN(precio) || precio < 0) { showFlash('Ingresa un precio válido', 'error'); return; }
-  if (!cant || cant<1) { showFlash('Ingresa una cantidad válida', 'error'); return; }
+  let precio, cant;
+  if (persModoDirec) {
+    const total = parseFloat(document.getElementById('pers-total-directo').value);
+    cant        = parseInt(document.getElementById('pers-cant-directo').value) || 1;
+    if (isNaN(total) || total < 0) { showFlash('Ingresa el total a cobrar', 'error'); return; }
+    precio = total / cant;
+  } else {
+    precio = parseFloat(document.getElementById('pers-precio').value);
+    cant   = parseInt(document.getElementById('pers-cant').value);
+    if (isNaN(precio) || precio < 0) { showFlash('Ingresa un precio válido', 'error'); return; }
+    if (!cant || cant < 1)           { showFlash('Ingresa una cantidad válida', 'error'); return; }
+  }
 
   const btn = document.getElementById('btn-pers');
   btn.disabled = true; btn.textContent = 'Registrando…';
@@ -589,6 +661,7 @@ async function registrarPersonalizada() {
   fd.append('descripcion', desc);
   fd.append('precio',      precio);
   fd.append('cantidad',    cant);
+  fd.append('usa_hojas',   persUsaHojas ? 'true' : 'false');
   if (persClienteId) fd.append('cliente_id', persClienteId);
 
   try {
