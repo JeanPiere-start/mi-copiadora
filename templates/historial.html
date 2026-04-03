@@ -1,93 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Historial de ventas{% endblock %}<!-- Modal editar venta -->
-<div class="modal-overlay" id="modal-editar">
-  <div class="modal-box">
-    <div class="modal-title">
-      ✏️ Editar venta
-      <button class="modal-close" onclick="cerrarEditar()">✕</button>
-    </div>
-    <input type="hidden" id="edit-id">
-
-    <div class="form-group">
-      <label>Descripción / Servicio</label>
-      <input type="text" id="edit-desc" placeholder="Nombre del servicio">
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group">
-        <label>Precio unitario (S/)</label>
-        <input type="number" id="edit-precio" step="0.01" min="0"
-               style="font-size:18px;font-weight:700;text-align:center"
-               oninput="calcEditTotal()">
-      </div>
-      <div class="form-group">
-        <label>Cantidad</label>
-        <input type="number" id="edit-cant" min="1"
-               style="font-size:18px;font-weight:700;text-align:center"
-               oninput="calcEditTotal()">
-      </div>
-    </div>
-    <div class="form-group">
-      <label>Total calculado</label>
-      <div style="font-size:26px;font-weight:900;color:var(--green);text-align:center"
-           id="edit-total">S/0.00</div>
-    </div>
-    <button class="btn btn-primary btn-full" onclick="guardarEdicion()">💾 Guardar cambios</button>
-  </div>
-</div>
-
-{% block scripts %}
-<script>
-function abrirEditar(id, cant, precio, desc) {
-  document.getElementById('edit-id').value     = id;
-  document.getElementById('edit-cant').value   = cant;
-  document.getElementById('edit-precio').value = precio;
-  document.getElementById('edit-desc').value   = desc;
-  calcEditTotal();
-  document.getElementById('modal-editar').classList.add('open');
-}
-function cerrarEditar() {
-  document.getElementById('modal-editar').classList.remove('open');
-}
-function calcEditTotal() {
-  const p = parseFloat(document.getElementById('edit-precio').value) || 0;
-  const q = parseInt(document.getElementById('edit-cant').value)     || 0;
-  document.getElementById('edit-total').textContent = 'S/' + (p*q).toFixed(2);
-}
-async function guardarEdicion() {
-  const id     = document.getElementById('edit-id').value;
-  const cant   = document.getElementById('edit-cant').value;
-  const precio = document.getElementById('edit-precio').value;
-  const desc   = document.getElementById('edit-desc').value;
-  const fd = new FormData();
-  fd.append('cantidad',    cant);
-  fd.append('precio',      precio);
-  fd.append('descripcion', desc);
-  const r    = await fetch(`/ventas/editar/${id}`, { method:'POST', body:fd });
-  const data = await r.json();
-  if (data.success) {
-    showFlash('✓ Venta actualizada', 'success');
-    cerrarEditar();
-    setTimeout(() => location.reload(), 1000);
-  } else {
-    showFlash(data.error || 'Error', 'error');
-  }
-}
-async function eliminarVenta(id, nombre) {
-  if (!confirm(`¿Eliminar la venta "${nombre}"?\n\nEsta acción no se puede deshacer.`)) return;
-  const r    = await fetch(`/ventas/eliminar/${id}`, { method:'POST' });
-  const data = await r.json();
-  if (data.success) {
-    showFlash('Venta eliminada', 'success');
-    setTimeout(() => location.reload(), 1000);
-  } else {
-    showFlash(data.error || 'Error', 'error');
-  }
-}
-document.getElementById('modal-editar').addEventListener('click', function(e) {
-  if (e.target === this) cerrarEditar();
-});
-</script>
-{% endblock %}
+{% block title %}Historial de ventas{% endblock %}
 
 {% block head %}
 <style>
@@ -162,12 +74,12 @@ document.getElementById('modal-editar').addEventListener('click', function(e) {
       <tbody>
         {% if ventas %}
           {% for v in ventas %}
-          <tr>
+          <tr id="fila-{{ v.id }}">
             <td>{{ v.fecha.strftime('%d/%m/%Y') }}</td>
             <td>{{ v.hora.strftime('%H:%M') }}</td>
             <td>
               {% if v.descripcion %}
-                <span class="badge badge-gray" style="margin-right:4px" title="Venta personalizada">✏️</span>
+                <span style="font-size:12px;margin-right:4px" title="Venta personalizada">✏️</span>
                 {{ v.descripcion }}
               {% else %}
                 {{ v.servicio.nombre }}
@@ -184,20 +96,20 @@ document.getElementById('modal-editar').addEventListener('click', function(e) {
                    style="color:var(--blue);text-decoration:none">{{ v.cliente.nombre }}</a>
               {% else %}—{% endif %}
             </td>
-            <td>
-              <button class="btn btn-sm" style="background:#EEF4FF;color:var(--blue);border:none;margin-bottom:4px"
-                      onclick="abrirEditar({{ v.id }}, {{ v.cantidad }}, {{ v.precio_unitario }}, '{{ (v.descripcion or v.servicio.nombre)|e }}')">
+            <td style="white-space:nowrap">
+              <button onclick="abrirEditar({{ v.id }}, {{ v.cantidad }}, {{ v.precio_unitario }}, '{{ (v.descripcion or v.servicio.nombre)|e }}')"
+                      style="background:#EEF4FF;color:var(--blue);border:none;border-radius:6px;padding:5px 8px;cursor:pointer;margin-right:4px">
                 ✏️
               </button>
-              <button class="btn btn-sm" style="background:#FEE2E2;color:#991B1B;border:none"
-                      onclick="eliminarVenta({{ v.id }}, '{{ (v.descripcion or v.servicio.nombre)|e }}')">
+              <button onclick="eliminarVenta({{ v.id }}, '{{ (v.descripcion or v.servicio.nombre)|e }}')"
+                      style="background:#FEE2E2;color:#991B1B;border:none;border-radius:6px;padding:5px 8px;cursor:pointer">
                 🗑
               </button>
             </td>
           </tr>
           {% endfor %}
         {% else %}
-          <tr><td colspan="8" class="text-center text-muted" style="padding:30px">
+          <tr><td colspan="9" class="text-center text-muted" style="padding:30px">
             Sin ventas para los filtros seleccionados.
           </td></tr>
         {% endif %}
@@ -211,14 +123,11 @@ document.getElementById('modal-editar').addEventListener('click', function(e) {
       <span class="monto" style="font-size:18px">Total: S/{{ "%.2f"|format(total_monto) }}</span>
     </div>
 
-    <!-- Paginador -->
     {% if total_paginas > 1 %}
     <div class="paginator">
       {% if pagina > 1 %}
-      <a href="?desde={{ desde }}&hasta={{ hasta }}&servicio_id={{ srv_id }}&pagina={{ pagina-1 }}"
-         class="pag-btn">‹</a>
+      <a href="?desde={{ desde }}&hasta={{ hasta }}&servicio_id={{ srv_id }}&pagina={{ pagina-1 }}" class="pag-btn">‹</a>
       {% endif %}
-
       {% for p in range(1, total_paginas+1) %}
         {% if p == pagina or (p >= pagina-2 and p <= pagina+2) or p == 1 or p == total_paginas %}
         <a href="?desde={{ desde }}&hasta={{ hasta }}&servicio_id={{ srv_id }}&pagina={{ p }}"
@@ -227,13 +136,115 @@ document.getElementById('modal-editar').addEventListener('click', function(e) {
         <span style="color:var(--muted)">…</span>
         {% endif %}
       {% endfor %}
-
       {% if pagina < total_paginas %}
-      <a href="?desde={{ desde }}&hasta={{ hasta }}&servicio_id={{ srv_id }}&pagina={{ pagina+1 }}"
-         class="pag-btn">›</a>
+      <a href="?desde={{ desde }}&hasta={{ hasta }}&servicio_id={{ srv_id }}&pagina={{ pagina+1 }}" class="pag-btn">›</a>
       {% endif %}
     </div>
     {% endif %}
   </div>
 </div>
+
+<!-- Modal editar venta -->
+<div class="modal-overlay" id="modal-editar">
+  <div class="modal-box">
+    <div class="modal-title">
+      ✏️ Editar venta
+      <button class="modal-close" onclick="cerrarEditar()">✕</button>
+    </div>
+    <input type="hidden" id="edit-id">
+
+    <div class="form-group">
+      <label>Descripción / Servicio</label>
+      <input type="text" id="edit-desc" placeholder="Nombre del servicio">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label>Precio unitario (S/)</label>
+        <input type="number" id="edit-precio" step="0.01" min="0"
+               style="font-size:18px;font-weight:700;text-align:center"
+               oninput="calcEditTotal()">
+      </div>
+      <div class="form-group">
+        <label>Cantidad</label>
+        <input type="number" id="edit-cant" min="1"
+               style="font-size:18px;font-weight:700;text-align:center"
+               oninput="calcEditTotal()">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Total calculado</label>
+      <div style="font-size:26px;font-weight:900;color:var(--green);text-align:center"
+           id="edit-total">S/0.00</div>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="guardarEdicion()">💾 Guardar cambios</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function abrirEditar(id, cant, precio, desc) {
+  document.getElementById('edit-id').value     = id;
+  document.getElementById('edit-cant').value   = cant;
+  document.getElementById('edit-precio').value = parseFloat(precio).toFixed(2);
+  document.getElementById('edit-desc').value   = desc;
+  calcEditTotal();
+  document.getElementById('modal-editar').classList.add('open');
+}
+
+function cerrarEditar() {
+  document.getElementById('modal-editar').classList.remove('open');
+}
+
+function calcEditTotal() {
+  const p = parseFloat(document.getElementById('edit-precio').value) || 0;
+  const q = parseInt(document.getElementById('edit-cant').value)     || 0;
+  document.getElementById('edit-total').textContent = 'S/' + (p * q).toFixed(2);
+}
+
+async function guardarEdicion() {
+  const id     = document.getElementById('edit-id').value;
+  const cant   = document.getElementById('edit-cant').value;
+  const precio = document.getElementById('edit-precio').value;
+  const desc   = document.getElementById('edit-desc').value.trim();
+
+  if (!cant || cant < 1)    { showFlash('Cantidad inválida', 'error'); return; }
+  if (precio === '' || precio < 0) { showFlash('Precio inválido', 'error'); return; }
+
+  const fd = new FormData();
+  fd.append('cantidad',    cant);
+  fd.append('precio',      precio);
+  fd.append('descripcion', desc);
+
+  const r    = await fetch(`/ventas/editar/${id}`, { method: 'POST', body: fd });
+  const data = await r.json();
+
+  if (data.success) {
+    showFlash('✓ Venta actualizada', 'success');
+    cerrarEditar();
+    setTimeout(() => location.reload(), 1000);
+  } else {
+    showFlash(data.error || 'Error al guardar', 'error');
+  }
+}
+
+async function eliminarVenta(id, nombre) {
+  if (!confirm(`¿Eliminar la venta "${nombre}"?\n\nEsta acción no se puede deshacer.`)) return;
+
+  const r    = await fetch(`/ventas/eliminar/${id}`, { method: 'POST' });
+  const data = await r.json();
+
+  if (data.success) {
+    showFlash('Venta eliminada', 'success');
+    const fila = document.getElementById('fila-' + id);
+    if (fila) fila.remove();
+  } else {
+    showFlash(data.error || 'Error', 'error');
+  }
+}
+
+document.getElementById('modal-editar').addEventListener('click', function(e) {
+  if (e.target === this) cerrarEditar();
+});
+</script>
 {% endblock %}
