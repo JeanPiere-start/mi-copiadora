@@ -69,6 +69,7 @@ class Venta(db.Model):
     usuario_id     = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     cliente_id     = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=True)
     es_canje       = db.Column(db.Boolean, default=False)
+    descripcion    = db.Column(db.String(200), nullable=True)  # para ventas personalizadas
 
     servicio = db.relationship('Servicio', backref='ventas')
     usuario  = db.relationship('Usuario',  backref='ventas')
@@ -157,6 +158,20 @@ def init_db():
             Servicio(nombre='Foto carné (hoja x6)',   precio=4.00, costo_real=0.034),
             Servicio(nombre='Llenado de formulario',  precio=2.50, costo_real=0.026),
         ])
+
+    # Migración: agregar columna descripcion si no existe
+    try:
+        from sqlalchemy import text
+        with db.engine.connect() as conn:
+            conn.execute(text('ALTER TABLE ventas ADD COLUMN descripcion VARCHAR(200)'))
+            conn.commit()
+    except Exception:
+        pass  # ya existe
+
+    # Servicio especial para ventas personalizadas (oculto en botones)
+    if not Servicio.query.filter_by(nombre='__personalizado__').first():
+        db.session.add(Servicio(nombre='__personalizado__', precio=0,
+                                costo_real=0, activo=False))
 
     # Inventario inicial
     if not Inventario.query.first():
@@ -278,12 +293,16 @@ def registrar_venta():
     if not srv or not srv.activo:
         return jsonify({'error': 'Servicio no disponible'}), 400
 
+    # Si precio=0 en el servicio, usar el precio ingresado manualmente
+    precio_manual = request.form.get('precio_manual', type=float)
+    precio_final  = precio_manual if (srv.precio == 0 and precio_manual and precio_manual > 0) else srv.precio
+
     now   = datetime.now()
-    total = round(srv.precio * cantidad, 2)
+    total = round(precio_final * cantidad, 2)
 
     v = Venta(fecha=now.date(), hora=now.time(),
               servicio_id=servicio_id, cantidad=cantidad,
-              precio_unitario=srv.precio, total=total,
+              precio_unitario=precio_final, total=total,
               usuario_id=session['usuario_id'], cliente_id=cliente_id,
               es_canje=False)
     db.session.add(v)
@@ -309,6 +328,62 @@ def registrar_venta():
         'puntos_actuales':puntos_actuales,
         'servicio':       srv.nombre,
         'cantidad':       cantidad,
+        'precio_variable': srv.precio == 0,
+    })
+
+
+@app.route('/ventas/personalizada', methods=['POST'])
+@login_required
+def venta_personalizada():
+    descripcion = request.form.get('descripcion', '').strip()
+    precio      = request.form.get('precio',      type=float)
+    cantidad    = request.form.get('cantidad',    type=int)
+    cliente_id  = request.form.get('cliente_id', type=int) or None
+
+    if not descripcion:
+        return jsonify({'error': 'Describe el servicio'}), 400
+    if precio is None or precio < 0:
+        return jsonify({'error': 'Precio inválido'}), 400
+    if not cantidad or cantidad <= 0:
+        return jsonify({'error': 'Cantidad inválida'}), 400
+
+    srv = Servicio.query.filter_by(nombre='__personalizado__').first()
+    if not srv:
+        srv = Servicio(nombre='__personalizado__', precio=0, costo_real=0, activo=False)
+        db.session.add(srv)
+        db.session.flush()
+
+    now   = datetime.now()
+    total = round(precio * cantidad, 2)
+
+    v = Venta(fecha=now.date(), hora=now.time(),
+              servicio_id=srv.id, cantidad=cantidad,
+              precio_unitario=precio, total=total,
+              usuario_id=session['usuario_id'], cliente_id=cliente_id,
+              descripcion=descripcion, es_canje=False)
+    db.session.add(v)
+
+    puntos_ganados  = 0
+    puntos_actuales = 0
+    if cliente_id:
+        cli = Cliente.query.get(cliente_id)
+        if cli:
+            puntos_ganados = floor(total / 10)
+            if puntos_ganados > 0:
+                cli.puntos += puntos_ganados
+                db.session.add(PuntosHistorial(
+                    cliente_id=cliente_id, puntos=puntos_ganados,
+                    descripcion=f'Compra: {descripcion} x{cantidad} = S/{total:.2f}'))
+            puntos_actuales = cli.puntos + puntos_ganados
+
+    db.session.commit()
+    return jsonify({
+        'success':         True,
+        'total':           total,
+        'puntos_ganados':  puntos_ganados,
+        'puntos_actuales': puntos_actuales,
+        'servicio':        descripcion,
+        'cantidad':        cantidad,
     })
 
 
@@ -572,8 +647,9 @@ def nuevo_servicio():
         return jsonify({'error': 'El nombre es requerido'}), 400
     if precio is None or precio < 0:
         return jsonify({'error': 'El precio no es válido'}), 400
+    # precio = 0 significa precio variable (se ingresa en cada venta)
     if costo_real is None or costo_real < 0:
-        costo_real = 0.0
+        costo_real = 0.0  # opcional: sin costo = margen desconocido
 
     s = Servicio(nombre=nombre, precio=precio, costo_real=costo_real, activo=True)
     db.session.add(s)
