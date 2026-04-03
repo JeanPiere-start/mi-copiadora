@@ -66,12 +66,23 @@
                      'Impresión B&N':'🖨','Impresión a color':'🎨','Escaneo':'📷',
                      'Foto carné (hoja x6)':'📸','Llenado de formulario':'📝'} %}
     {% for s in servicios %}
-    <button class="srv-btn" onclick="abrirModal({{ s.id }}, '{{ s.nombre|e }}', {{ s.precio }})">
+    <button class="srv-btn" onclick="abrirModal({{ s.id }}, '{{ s.nombre|e }}', {{ s.precio }}, {{ 'true' if s.precio == 0 else 'false' }})">
       <span class="srv-ico">{{ iconos.get(s.nombre, '📋') }}</span>
       <span class="srv-name">{{ s.nombre }}</span>
-      <span class="srv-price">S/{{ "%.2f"|format(s.precio) }}</span>
+      {% if s.precio == 0 %}
+        <span class="srv-price" style="color:var(--warn);font-size:12px">Precio variable</span>
+      {% else %}
+        <span class="srv-price">S/{{ "%.2f"|format(s.precio) }}</span>
+      {% endif %}
     </button>
     {% endfor %}
+  </div>
+
+  <div style="margin-top:12px">
+    <button class="btn btn-outline btn-full" style="border-style:dashed"
+            onclick="abrirPersonalizada()">
+      ✏️ Venta personalizada / combinada
+    </button>
   </div>
 </div>
 
@@ -95,6 +106,94 @@
   {% else %}
   <p class="text-muted text-center">Sin ventas en este turno todavía.</p>
   {% endif %}
+</div>
+
+<!-- ── MODAL PERSONALIZADA ── -->
+<div class="modal-overlay" id="modal-pers">
+  <div class="modal-box">
+    <div class="modal-title">
+      ✏️ Venta personalizada
+      <button class="modal-close" onclick="cerrarPersonalizada()">✕</button>
+    </div>
+
+    <div class="form-group">
+      <label>¿Qué servicio o producto fue? *</label>
+      <input type="text" id="pers-desc"
+             placeholder="Ej: Tipeo + Impresión a color, Sticker A4, Recarga Bitel…"
+             style="font-size:15px">
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">
+        Escríbelo como quieras — aparecerá exactamente así en el historial
+      </div>
+    </div>
+
+    <!-- Precio manual (solo para servicios con precio variable) -->
+    <div class="form-group" id="precio-manual-row" style="display:none">
+      <label>💰 Precio a cobrar (S/)</label>
+      <input type="number" id="modal-precio-manual" min="0" step="0.10"
+             placeholder="Ej: 5.00, 10.00, 25.00…"
+             oninput="calcTotal()"
+             style="font-size:22px;font-weight:700;text-align:center;color:var(--green)">
+      <div style="font-size:12px;color:var(--muted);margin-top:3px">
+        Este servicio no tiene precio fijo — ingresa el monto según lo acordado
+      </div>
+    </div>
+
+    <!-- Cliente (opcional) -->
+    <div class="form-group">
+      <label>👤 Cliente (opcional)</label>
+      <div id="pers-cli-no-sel">
+        <div class="cliente-search">
+          <input type="text" id="pers-cli-buscar" placeholder="Buscar por nombre o celular…"
+                 oninput="buscarClientePers(this.value)" autocomplete="off">
+          <div class="cliente-results" id="pers-cli-results"></div>
+        </div>
+      </div>
+      <div id="pers-cli-sel" style="display:none">
+        <div class="cliente-selected">
+          <div>
+            <strong id="pers-sel-nombre">—</strong>
+            <span class="text-muted" id="pers-sel-puntos"></span>
+          </div>
+          <button type="button" class="btn btn-sm" style="background:#EEF4FF;color:var(--blue)"
+                  onclick="limpiarClientePers()">✕ Quitar</button>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div class="form-group" style="margin:0">
+        <label>Precio unitario (S/)</label>
+        <input type="number" id="pers-precio" min="0" step="0.10"
+               placeholder="0.00" oninput="calcTotalPers()"
+               style="font-size:20px;font-weight:700;text-align:center">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Cantidad</label>
+        <input type="number" id="pers-cant" min="1" value="1"
+               oninput="calcTotalPers()"
+               style="font-size:20px;font-weight:700;text-align:center">
+      </div>
+    </div>
+
+    <!-- Teclado rápido cantidades -->
+    <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+      {% for q in [1,2,5,10,20,50] %}
+      <button type="button" class="btn btn-outline btn-sm" onclick="setPersQ({{ q }})">{{ q }}</button>
+      {% endfor %}
+    </div>
+
+    <div class="form-group">
+      <label>Total</label>
+      <div style="font-size:30px;font-weight:900;color:var(--green);text-align:center"
+           id="pers-total">S/0.00</div>
+    </div>
+
+    <button class="btn btn-success btn-full" id="btn-pers" onclick="registrarPersonalizada()">
+      ✓ Registrar venta
+    </button>
+  </div>
 </div>
 
 <!-- ── MODAL ── -->
@@ -192,19 +291,37 @@
 
 {% block scripts %}
 <script>
-let modalSrvId    = null;
-let modalSrvPrecio= 0;
-let clienteId     = null;
+let modalSrvId     = null;
+let modalSrvPrecio = 0;
+let modalPrecioVar = false;
+let clienteId      = null;
 
-function abrirModal(id, nombre, precio) {
-  modalSrvId     = id;
-  modalSrvPrecio = precio;
+function abrirModal(id, nombre, precio, precioVariable) {
+  modalSrvId       = id;
+  modalSrvPrecio   = precio;
+  modalPrecioVar   = !!precioVariable;
   document.getElementById('modal-srv-name').textContent = nombre;
-  document.getElementById('modal-cant').value = 1;
+  document.getElementById('modal-cant').value  = 1;
+
+  // Mostrar/ocultar campo de precio manual
+  const precioRow = document.getElementById('precio-manual-row');
+  const precioInp = document.getElementById('modal-precio-manual');
+  if (modalPrecioVar) {
+    precioRow.style.display = 'block';
+    precioInp.value = '';
+    document.getElementById('modal-total').textContent = 'S/0.00';
+  } else {
+    precioRow.style.display = 'none';
+    precioInp.value = '';
+  }
+
   limpiarCliente();
   calcTotal();
   document.getElementById('modal').classList.add('open');
-  setTimeout(() => document.getElementById('modal-cant').focus(), 200);
+  setTimeout(() => {
+    if (modalPrecioVar) precioInp.focus();
+    else document.getElementById('modal-cant').focus();
+  }, 200);
 }
 
 function cerrarModal() {
@@ -217,9 +334,12 @@ function setCant(n) {
 }
 
 function calcTotal() {
-  const cant  = parseInt(document.getElementById('modal-cant').value) || 0;
-  const total = (cant * modalSrvPrecio).toFixed(2);
-  document.getElementById('modal-total').textContent = 'S/' + total;
+  const cant   = parseInt(document.getElementById('modal-cant').value) || 0;
+  let   precio = modalSrvPrecio;
+  if (modalPrecioVar) {
+    precio = parseFloat(document.getElementById('modal-precio-manual').value) || 0;
+  }
+  document.getElementById('modal-total').textContent = 'S/' + (cant * precio).toFixed(2);
 }
 
 // ── CLIENTE ──────────────────────────────────────
@@ -299,6 +419,11 @@ async function registrarVenta() {
   fd.append('servicio_id', modalSrvId);
   fd.append('cantidad',    cant);
   if (clienteId) fd.append('cliente_id', clienteId);
+  if (modalPrecioVar) {
+    const pm = parseFloat(document.getElementById('modal-precio-manual').value);
+    if (!pm || pm <= 0) { showFlash('Ingresa el precio a cobrar', 'error'); btn.disabled=false; btn.textContent='✓ Registrar venta'; return; }
+    fd.append('precio_manual', pm);
+  }
 
   try {
     const r    = await fetch('/ventas/registrar', { method:'POST', body: fd });
@@ -377,5 +502,117 @@ document.getElementById('modal').addEventListener('click', function(e) {
 document.getElementById('modal-nuevo-cli').addEventListener('click', function(e) {
   if (e.target === this) cerrarNuevoCli();
 });
+document.getElementById('modal-pers').addEventListener('click', function(e) {
+  if (e.target === this) cerrarPersonalizada();
+});
+
+// ── VENTA PERSONALIZADA ──────────────────────────────────────
+
+let persClienteId = null;
+
+function abrirPersonalizada() {
+  document.getElementById('pers-desc').value   = '';
+  document.getElementById('pers-precio').value = '';
+  document.getElementById('pers-cant').value   = '1';
+  document.getElementById('pers-total').textContent = 'S/0.00';
+  limpiarClientePers();
+  document.getElementById('modal-pers').classList.add('open');
+  setTimeout(() => document.getElementById('pers-desc').focus(), 200);
+}
+
+function cerrarPersonalizada() {
+  document.getElementById('modal-pers').classList.remove('open');
+}
+
+function calcTotalPers() {
+  const p = parseFloat(document.getElementById('pers-precio').value) || 0;
+  const q = parseInt(document.getElementById('pers-cant').value)     || 0;
+  document.getElementById('pers-total').textContent = 'S/' + (p * q).toFixed(2);
+}
+
+function setPersQ(n) {
+  document.getElementById('pers-cant').value = n;
+  calcTotalPers();
+}
+
+// Búsqueda de cliente en modal personalizada
+let persBuscarTimeout = null;
+function buscarClientePers(q) {
+  clearTimeout(persBuscarTimeout);
+  if (q.length < 2) { document.getElementById('pers-cli-results').style.display='none'; return; }
+  persBuscarTimeout = setTimeout(async () => {
+    const r = await fetch(`/crm/buscar?q=${encodeURIComponent(q)}`);
+    const data = await r.json();
+    const box  = document.getElementById('pers-cli-results');
+    box.innerHTML = data.length
+      ? data.map(c =>
+          `<div class="cliente-result-item" onclick="selClientePers(${c.id},'${c.nombre.replace(/'/g,"\'")}',${c.puntos})">
+             <strong>${c.nombre}</strong>
+             ${c.celular ? `<span class="text-muted"> · ${c.celular}</span>` : ''}
+             <span class="badge badge-blue">${c.puntos} pts</span>
+           </div>`).join('')
+      : `<div class="cliente-result-item text-muted">No encontrado</div>`;
+    box.style.display = 'block';
+  }, 300);
+}
+
+function selClientePers(id, nombre, puntos) {
+  persClienteId = id;
+  document.getElementById('pers-sel-nombre').textContent = nombre;
+  document.getElementById('pers-sel-puntos').textContent = ` · ${puntos} puntos`;
+  document.getElementById('pers-cli-no-sel').style.display = 'none';
+  document.getElementById('pers-cli-sel').style.display    = 'block';
+  document.getElementById('pers-cli-results').style.display= 'none';
+}
+
+function limpiarClientePers() {
+  persClienteId = null;
+  document.getElementById('pers-cli-no-sel').style.display = 'block';
+  document.getElementById('pers-cli-sel').style.display    = 'none';
+  document.getElementById('pers-cli-buscar').value         = '';
+  document.getElementById('pers-cli-results').style.display= 'none';
+}
+
+async function registrarPersonalizada() {
+  const desc   = document.getElementById('pers-desc').value.trim();
+  const precio = parseFloat(document.getElementById('pers-precio').value);
+  const cant   = parseInt(document.getElementById('pers-cant').value);
+
+  if (!desc)           { showFlash('Describe el servicio o producto', 'error'); return; }
+  if (isNaN(precio) || precio < 0) { showFlash('Ingresa un precio válido', 'error'); return; }
+  if (!cant || cant<1) { showFlash('Ingresa una cantidad válida', 'error'); return; }
+
+  const btn = document.getElementById('btn-pers');
+  btn.disabled = true; btn.textContent = 'Registrando…';
+
+  const fd = new FormData();
+  fd.append('descripcion', desc);
+  fd.append('precio',      precio);
+  fd.append('cantidad',    cant);
+  if (persClienteId) fd.append('cliente_id', persClienteId);
+
+  try {
+    const r    = await fetch('/ventas/personalizada', { method:'POST', body:fd });
+    const data = await r.json();
+    if (data.success) {
+      const total = parseFloat(data.total);
+      const barVal = document.querySelector('.turno-bar .val');
+      const actual = parseFloat(barVal.textContent.replace('S/','')) + total;
+      barVal.textContent = 'S/' + actual.toFixed(2);
+
+      agregarUltimaVenta(data.servicio, data.cantidad, total);
+
+      let msg = `✓ ${data.servicio} x${data.cantidad} = S/${total.toFixed(2)}`;
+      if (data.puntos_ganados > 0) msg += ` | +${data.puntos_ganados} pts al cliente`;
+      showFlash(msg, 'success');
+      cerrarPersonalizada();
+    } else {
+      showFlash(data.error || 'Error al registrar', 'error');
+    }
+  } catch(e) {
+    showFlash('Error de conexión', 'error');
+  }
+  btn.disabled = false; btn.textContent = '✓ Registrar venta';
+}
 </script>
 {% endblock %}
