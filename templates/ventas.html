@@ -147,6 +147,11 @@
                  oninput="buscarClientePers(this.value)" autocomplete="off">
           <div class="cliente-results" id="pers-cli-results"></div>
         </div>
+        <div class="mt-2">
+          <button type="button" class="btn btn-outline btn-sm" onclick="mostrarNuevoCliPers()">
+            + Nuevo cliente
+          </button>
+        </div>
       </div>
       <div id="pers-cli-sel" style="display:none">
         <div class="cliente-selected">
@@ -635,6 +640,16 @@ function limpiarClientePers() {
   document.getElementById('pers-cli-sel').style.display    = 'none';
   document.getElementById('pers-cli-buscar').value         = '';
   document.getElementById('pers-cli-results').style.display= 'none';
+}
+
+// Nuevo cliente desde modal personalizada
+function mostrarNuevoCliPers() {
+  // Reutiliza el mismo modal de nuevo cliente
+  document.getElementById('nc-nombre').value  = '';
+  document.getElementById('nc-celular').value = '';
+  // Al guardar, selecciona en personalizada
+  window._nuevoCliTarget = 'pers';
+  document.getElementById('modal-nuevo-cli').classList.add('open');
 }
 
 async function registrarPersonalizada() {
