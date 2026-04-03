@@ -77,7 +77,12 @@
             <td>{{ v.fecha.strftime('%d/%m/%Y') }}</td>
             <td>{{ v.hora.strftime('%H:%M') }}</td>
             <td>
-              {{ v.servicio.nombre }}
+              {% if v.descripcion %}
+                <span class="badge badge-gray" style="margin-right:4px" title="Venta personalizada">✏️</span>
+                {{ v.descripcion }}
+              {% else %}
+                {{ v.servicio.nombre }}
+              {% endif %}
               {% if v.es_canje %}<span class="badge badge-blue">🎁 Canje</span>{% endif %}
             </td>
             <td>{{ v.cantidad }}</td>
