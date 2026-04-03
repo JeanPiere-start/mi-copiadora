@@ -345,6 +345,7 @@ def venta_personalizada():
     precio      = request.form.get('precio',      type=float)
     cantidad    = request.form.get('cantidad',    type=int)
     cliente_id  = request.form.get('cliente_id', type=int) or None
+    usa_hojas   = request.form.get('usa_hojas', 'true') == 'true'
 
     if not descripcion:
         return jsonify({'error': 'Describe el servicio'}), 400
@@ -353,9 +354,11 @@ def venta_personalizada():
     if not cantidad or cantidad <= 0:
         return jsonify({'error': 'Cantidad inválida'}), 400
 
-    srv = Servicio.query.filter_by(nombre='__personalizado__').first()
+    # Elegir servicio según si usa hojas o no
+    srv_nombre = '__personalizado__' if usa_hojas else '__personalizado_sinhojas__'
+    srv = Servicio.query.filter_by(nombre=srv_nombre).first()
     if not srv:
-        srv = Servicio(nombre='__personalizado__', precio=0, costo_real=0, activo=False)
+        srv = Servicio(nombre=srv_nombre, precio=0, costo_real=0, activo=False)
         db.session.add(srv)
         db.session.flush()
 
@@ -888,6 +891,65 @@ def exportar():
     fname = f"reporte_{nombre_negocio.replace(' ', '_')}_{date.today()}.xlsx"
     return send_file(output, as_attachment=True, download_name=fname,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+# ============================================================
+# EDITAR / ELIMINAR VENTAS  (solo admin)
+# ============================================================
+
+@app.route('/ventas/editar/<int:id>', methods=['POST'])
+@admin_required
+def editar_venta(id):
+    v = Venta.query.get_or_404(id)
+    cantidad    = request.form.get('cantidad',    type=int)
+    precio      = request.form.get('precio',      type=float)
+    descripcion = request.form.get('descripcion', '').strip()
+    usa_hojas   = request.form.get('usa_hojas', 'true') == 'true'
+
+    if cantidad and cantidad > 0:
+        v.cantidad = cantidad
+    if precio is not None and precio >= 0:
+        v.precio_unitario = precio
+    if descripcion:
+        v.descripcion = descripcion
+
+    v.total = round(v.precio_unitario * v.cantidad, 2)
+
+    # Actualizar puntos del cliente si aplica
+    if v.cliente_id:
+        cli = Cliente.query.get(v.cliente_id)
+        if cli:
+            puntos_nuevos = floor(v.total / 10)
+            db.session.add(PuntosHistorial(
+                cliente_id=v.cliente_id, puntos=puntos_nuevos,
+                descripcion=f'Corrección de venta #{id}'))
+
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'total': v.total,
+        'cantidad': v.cantidad,
+        'precio_unitario': v.precio_unitario,
+    })
+
+
+@app.route('/ventas/eliminar/<int:id>', methods=['POST'])
+@admin_required
+def eliminar_venta(id):
+    v = Venta.query.get_or_404(id)
+    # Revertir puntos si tiene cliente
+    if v.cliente_id and not v.es_canje:
+        cli = Cliente.query.get(v.cliente_id)
+        if cli:
+            puntos_restar = floor(v.total / 10)
+            cli.puntos = max(0, cli.puntos - puntos_restar)
+            if puntos_restar > 0:
+                db.session.add(PuntosHistorial(
+                    cliente_id=v.cliente_id, puntos=-puntos_restar,
+                    descripcion=f'Venta #{id} eliminada'))
+    db.session.delete(v)
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 # ============================================================
