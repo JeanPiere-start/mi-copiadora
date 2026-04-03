@@ -900,11 +900,12 @@ def exportar():
 @app.route('/ventas/editar/<int:id>', methods=['POST'])
 @admin_required
 def editar_venta(id):
-    v = Venta.query.get_or_404(id)
+    v           = Venta.query.get_or_404(id)
     cantidad    = request.form.get('cantidad',    type=int)
     precio      = request.form.get('precio',      type=float)
     descripcion = request.form.get('descripcion', '').strip()
-    usa_hojas   = request.form.get('usa_hojas', 'true') == 'true'
+    cliente_id  = request.form.get('cliente_id', type=int)
+    quitar_cli  = request.form.get('quitar_cliente', 'false') == 'true'
 
     if cantidad and cantidad > 0:
         v.cantidad = cantidad
@@ -913,23 +914,32 @@ def editar_venta(id):
     if descripcion:
         v.descripcion = descripcion
 
+    # Manejo de cliente
+    if quitar_cli:
+        v.cliente_id = None
+    elif cliente_id:
+        v.cliente_id = cliente_id
+
     v.total = round(v.precio_unitario * v.cantidad, 2)
 
-    # Actualizar puntos del cliente si aplica
-    if v.cliente_id:
+    # Registrar puntos si hay cliente
+    if v.cliente_id and not v.es_canje:
         cli = Cliente.query.get(v.cliente_id)
         if cli:
-            puntos_nuevos = floor(v.total / 10)
-            db.session.add(PuntosHistorial(
-                cliente_id=v.cliente_id, puntos=puntos_nuevos,
-                descripcion=f'Corrección de venta #{id}'))
+            puntos = floor(v.total / 10)
+            if puntos > 0:
+                cli.puntos += puntos
+                db.session.add(PuntosHistorial(
+                    cliente_id=v.cliente_id, puntos=puntos,
+                    descripcion=f'Corrección de venta #{id}'))
 
     db.session.commit()
     return jsonify({
-        'success': True,
-        'total': v.total,
-        'cantidad': v.cantidad,
+        'success':         True,
+        'total':           v.total,
+        'cantidad':        v.cantidad,
         'precio_unitario': v.precio_unitario,
+        'cliente_id':      v.cliente_id,
     })
 
 
