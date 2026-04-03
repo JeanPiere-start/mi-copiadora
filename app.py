@@ -19,7 +19,13 @@ from openpyxl.utils import get_column_letter
 # ============================================================
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'copiadora_peru_2024_xK9mL2')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///copiadora.db')
+# Render usa 'postgres://' pero SQLAlchemy necesita 'postgresql://'
+_db_url = os.environ.get('DATABASE_URL', 'sqlite:///copiadora.db')
+if _db_url.startswith('postgres://'):
+    _db_url = _db_url.replace('postgres://', 'postgresql+psycopg2://', 1)
+elif _db_url.startswith('postgresql://') and '+psycopg2' not in _db_url:
+    _db_url = _db_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
 
