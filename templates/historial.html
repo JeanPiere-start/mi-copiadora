@@ -15,24 +15,33 @@
   .totales-bar { background:#F0FFF8; border:1px solid #A7F3D0; border-radius:10px;
                  padding:12px 16px; display:flex; justify-content:space-between;
                  align-items:center; margin-top:12px; }
+  .cliente-search { position:relative; }
+  .cli-results { position:absolute; top:100%; left:0; right:0; z-index:300;
+                 background:var(--card); border:2px solid var(--blue);
+                 border-radius:10px; box-shadow:var(--shadow);
+                 max-height:180px; overflow-y:auto; display:none; }
+  .cli-item { padding:10px 14px; cursor:pointer; font-size:13px;
+              border-bottom:1px solid var(--border); }
+  .cli-item:hover { background:#EEF4FF; }
+  .cli-item:last-child { border:none; }
+  .cli-chip { background:#D1FAE5; border:2px solid var(--green); border-radius:10px;
+              padding:8px 12px; font-size:13px;
+              display:flex; justify-content:space-between; align-items:center; }
+  .toggle-opt { padding:8px 14px; border-radius:8px; border:2px solid var(--border);
+                background:var(--card); cursor:pointer; font-size:13px; font-weight:600;
+                transition:all .2s; }
+  .toggle-opt.on { border-color:var(--blue); background:#EEF4FF; color:var(--blue); }
 </style>
 {% endblock %}
 
 {% block content %}
 <h2 style="font-size:19px;font-weight:800;color:var(--blue);margin-bottom:16px">📋 Historial de ventas</h2>
 
-<!-- Filtros -->
 <div class="card">
   <form method="GET" action="{{ url_for('historial') }}">
     <div class="filter-bar">
-      <div class="fg">
-        <label>Desde</label>
-        <input type="date" name="desde" value="{{ desde }}">
-      </div>
-      <div class="fg">
-        <label>Hasta</label>
-        <input type="date" name="hasta" value="{{ hasta }}">
-      </div>
+      <div class="fg"><label>Desde</label><input type="date" name="desde" value="{{ desde }}"></div>
+      <div class="fg"><label>Hasta</label><input type="date" name="hasta" value="{{ hasta }}"></div>
       <div class="fg">
         <label>Servicio</label>
         <select name="servicio_id">
@@ -48,27 +57,17 @@
   </form>
 </div>
 
-<!-- Botón exportar -->
 <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
-  <a href="{{ url_for('exportar', desde=desde, hasta=hasta) }}"
-     class="btn btn-success btn-sm">⬇️ Exportar Excel</a>
+  <a href="{{ url_for('exportar', desde=desde, hasta=hasta) }}" class="btn btn-success btn-sm">⬇️ Exportar Excel</a>
 </div>
 
-<!-- Tabla -->
 <div class="card" style="padding:0">
   <div class="tbl-wrap">
     <table>
       <thead>
         <tr>
-          <th>Fecha</th>
-          <th>Hora</th>
-          <th>Servicio</th>
-          <th>Cant.</th>
-          <th>P. Unit.</th>
-          <th>Total</th>
-          <th>Usuario</th>
-          <th>Cliente</th>
-          <th>Acciones</th>
+          <th>Fecha</th><th>Hora</th><th>Servicio</th><th>Cant.</th>
+          <th>P.Unit.</th><th>Total</th><th>Usuario</th><th>Cliente</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -78,13 +77,9 @@
             <td>{{ v.fecha.strftime('%d/%m/%Y') }}</td>
             <td>{{ v.hora.strftime('%H:%M') }}</td>
             <td>
-              {% if v.descripcion %}
-                <span style="font-size:12px;margin-right:4px" title="Venta personalizada">✏️</span>
-                {{ v.descripcion }}
-              {% else %}
-                {{ v.servicio.nombre }}
-              {% endif %}
-              {% if v.es_canje %}<span class="badge badge-blue">🎁 Canje</span>{% endif %}
+              {% if v.descripcion %}<span title="Personalizada">✏️</span> {{ v.descripcion }}
+              {% else %}{{ v.servicio.nombre }}{% endif %}
+              {% if v.es_canje %}<span class="badge badge-blue">🎁</span>{% endif %}
             </td>
             <td>{{ v.cantidad }}</td>
             <td>S/{{ "%.2f"|format(v.precio_unitario) }}</td>
@@ -97,97 +92,196 @@
               {% else %}—{% endif %}
             </td>
             <td style="white-space:nowrap">
-              <button onclick="abrirEditar({{ v.id }}, {{ v.cantidad }}, {{ v.precio_unitario }}, '{{ (v.descripcion or v.servicio.nombre)|e }}')"
-                      style="background:#EEF4FF;color:var(--blue);border:none;border-radius:6px;padding:5px 8px;cursor:pointer;margin-right:4px">
-                ✏️
-              </button>
+              <button onclick="abrirEditar({{ v.id }}, {{ v.cantidad }}, {{ v.precio_unitario }}, '{{ (v.descripcion or v.servicio.nombre)|e }}', {{ v.cliente.id if v.cliente else 'null' }}, '{{ v.cliente.nombre if v.cliente else '' }}')"
+                      style="background:#EEF4FF;color:var(--blue);border:none;border-radius:6px;padding:5px 9px;cursor:pointer;margin-right:3px">✏️</button>
               <button onclick="eliminarVenta({{ v.id }}, '{{ (v.descripcion or v.servicio.nombre)|e }}')"
-                      style="background:#FEE2E2;color:#991B1B;border:none;border-radius:6px;padding:5px 8px;cursor:pointer">
-                🗑
-              </button>
+                      style="background:#FEE2E2;color:#991B1B;border:none;border-radius:6px;padding:5px 9px;cursor:pointer">🗑</button>
             </td>
           </tr>
           {% endfor %}
         {% else %}
-          <tr><td colspan="9" class="text-center text-muted" style="padding:30px">
-            Sin ventas para los filtros seleccionados.
-          </td></tr>
+          <tr><td colspan="9" class="text-center text-muted" style="padding:30px">Sin ventas para los filtros seleccionados.</td></tr>
         {% endif %}
       </tbody>
     </table>
   </div>
-
   <div style="padding:16px">
     <div class="totales-bar">
       <span><strong>{{ total_count }}</strong> ventas encontradas</span>
       <span class="monto" style="font-size:18px">Total: S/{{ "%.2f"|format(total_monto) }}</span>
     </div>
-
     {% if total_paginas > 1 %}
     <div class="paginator">
-      {% if pagina > 1 %}
-      <a href="?desde={{ desde }}&hasta={{ hasta }}&servicio_id={{ srv_id }}&pagina={{ pagina-1 }}" class="pag-btn">‹</a>
-      {% endif %}
+      {% if pagina > 1 %}<a href="?desde={{ desde }}&hasta={{ hasta }}&servicio_id={{ srv_id }}&pagina={{ pagina-1 }}" class="pag-btn">‹</a>{% endif %}
       {% for p in range(1, total_paginas+1) %}
         {% if p == pagina or (p >= pagina-2 and p <= pagina+2) or p == 1 or p == total_paginas %}
-        <a href="?desde={{ desde }}&hasta={{ hasta }}&servicio_id={{ srv_id }}&pagina={{ p }}"
-           class="pag-btn {% if p == pagina %}active{% endif %}">{{ p }}</a>
-        {% elif p == pagina-3 or p == pagina+3 %}
-        <span style="color:var(--muted)">…</span>
-        {% endif %}
+        <a href="?desde={{ desde }}&hasta={{ hasta }}&servicio_id={{ srv_id }}&pagina={{ p }}" class="pag-btn {% if p == pagina %}active{% endif %}">{{ p }}</a>
+        {% elif p == pagina-3 or p == pagina+3 %}<span style="color:var(--muted)">…</span>{% endif %}
       {% endfor %}
-      {% if pagina < total_paginas %}
-      <a href="?desde={{ desde }}&hasta={{ hasta }}&servicio_id={{ srv_id }}&pagina={{ pagina+1 }}" class="pag-btn">›</a>
-      {% endif %}
+      {% if pagina < total_paginas %}<a href="?desde={{ desde }}&hasta={{ hasta }}&servicio_id={{ srv_id }}&pagina={{ pagina+1 }}" class="pag-btn">›</a>{% endif %}
     </div>
     {% endif %}
   </div>
 </div>
 
-<!-- Modal editar venta -->
+<!-- ── MODAL EDITAR ── -->
 <div class="modal-overlay" id="modal-editar">
-  <div class="modal-box">
+  <div class="modal-box" style="max-height:90vh;overflow-y:auto">
     <div class="modal-title">
       ✏️ Editar venta
       <button class="modal-close" onclick="cerrarEditar()">✕</button>
     </div>
     <input type="hidden" id="edit-id">
 
+    <!-- Descripción -->
     <div class="form-group">
       <label>Descripción / Servicio</label>
-      <input type="text" id="edit-desc" placeholder="Nombre del servicio">
+      <input type="text" id="edit-desc" placeholder="Nombre del servicio o producto">
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+
+    <!-- Toggles -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <button type="button" id="edit-toggle-modo" class="toggle-opt on" onclick="editToggleModo()">
+        💰 Precio × Cantidad
+      </button>
+      <button type="button" id="edit-toggle-hojas" class="toggle-opt on" onclick="editToggleHojas()">
+        📄 Usa hojas: Sí
+      </button>
+    </div>
+
+    <!-- Modo precio × cantidad -->
+    <div id="edit-modo-normal">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
+        <div class="form-group" style="margin:0">
+          <label>Precio unitario (S/)</label>
+          <input type="number" id="edit-precio" step="0.01" min="0" oninput="calcEditTotal()"
+                 style="font-size:18px;font-weight:700;text-align:center">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label>Cantidad</label>
+          <input type="number" id="edit-cant" min="1" oninput="calcEditTotal()"
+                 style="font-size:18px;font-weight:700;text-align:center">
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+        <button type="button" class="btn btn-outline btn-sm" onclick="setEditQ(1)">1</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="setEditQ(2)">2</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="setEditQ(5)">5</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="setEditQ(10)">10</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="setEditQ(20)">20</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="setEditQ(50)">50</button>
+      </div>
+    </div>
+
+    <!-- Modo total directo -->
+    <div id="edit-modo-directo" style="display:none">
       <div class="form-group">
-        <label>Precio unitario (S/)</label>
-        <input type="number" id="edit-precio" step="0.01" min="0"
-               style="font-size:18px;font-weight:700;text-align:center"
-               oninput="calcEditTotal()">
+        <label>Total a cobrar (S/)</label>
+        <input type="number" id="edit-total-dir" min="0" step="0.50" oninput="syncEditDir()"
+               style="font-size:22px;font-weight:700;text-align:center;color:var(--green)">
       </div>
       <div class="form-group">
-        <label>Cantidad</label>
-        <input type="number" id="edit-cant" min="1"
-               style="font-size:18px;font-weight:700;text-align:center"
-               oninput="calcEditTotal()">
+        <label>Cantidad <span style="font-weight:400;color:var(--muted)">(para el historial)</span></label>
+        <input type="number" id="edit-cant-dir" min="1" value="1"
+               style="font-size:18px;font-weight:700;text-align:center">
       </div>
+    </div>
+
+    <!-- Total calculado -->
+    <div style="font-size:26px;font-weight:900;color:var(--green);text-align:center;margin-bottom:14px"
+         id="edit-total-display">S/0.00</div>
+
+    <hr>
+
+    <!-- Cliente -->
+    <div class="form-group">
+      <label>👤 Cliente</label>
+      <div id="edit-cli-no-sel">
+        <div class="cliente-search">
+          <input type="text" id="edit-cli-buscar" placeholder="Buscar por nombre o celular…"
+                 oninput="buscarCliEdit(this.value)" autocomplete="off">
+          <div class="cli-results" id="edit-cli-results"></div>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm mt-2" onclick="mostrarNuevoCliEdit()">
+          + Nuevo cliente
+        </button>
+      </div>
+      <div id="edit-cli-sel" style="display:none">
+        <div class="cli-chip">
+          <div>
+            <strong id="edit-cli-nombre">—</strong>
+            <span class="text-muted" id="edit-cli-pts"></span>
+          </div>
+          <button type="button" class="btn btn-sm" style="background:#EEF4FF;color:var(--blue)"
+                  onclick="quitarCliEdit()">✕ Quitar</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-full" onclick="guardarEdicion()">💾 Guardar cambios</button>
+  </div>
+</div>
+
+<!-- Modal nuevo cliente (desde historial) -->
+<div class="modal-overlay" id="modal-nuevo-cli-hist">
+  <div class="modal-box">
+    <div class="modal-title">
+      Nuevo cliente
+      <button class="modal-close" onclick="cerrarNuevoCliHist()">✕</button>
     </div>
     <div class="form-group">
-      <label>Total calculado</label>
-      <div style="font-size:26px;font-weight:900;color:var(--green);text-align:center"
-           id="edit-total">S/0.00</div>
+      <label>Nombre completo *</label>
+      <input type="text" id="nch-nombre" placeholder="Ej: María López">
     </div>
-    <button class="btn btn-primary btn-full" onclick="guardarEdicion()">💾 Guardar cambios</button>
+    <div class="form-group">
+      <label>Celular (opcional)</label>
+      <input type="tel" id="nch-celular" placeholder="999 000 000">
+    </div>
+    <button class="btn btn-success btn-full" onclick="guardarNuevoCliHist()">Guardar cliente</button>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function abrirEditar(id, cant, precio, desc) {
-  document.getElementById('edit-id').value     = id;
-  document.getElementById('edit-cant').value   = cant;
-  document.getElementById('edit-precio').value = parseFloat(precio).toFixed(2);
-  document.getElementById('edit-desc').value   = desc;
+// ── Estado ────────────────────────────────────────────────────
+let editModoDirec = false;
+let editUsaHojas  = true;
+let editCliId     = null;
+let editBuscarTO  = null;
+
+// ── Abrir/cerrar ──────────────────────────────────────────────
+function abrirEditar(id, cant, precio, desc, cliId, cliNombre) {
+  document.getElementById('edit-id').value      = id;
+  document.getElementById('edit-desc').value    = desc;
+  document.getElementById('edit-precio').value  = parseFloat(precio).toFixed(2);
+  document.getElementById('edit-cant').value    = cant;
+  document.getElementById('edit-total-dir').value = '';
+  document.getElementById('edit-cant-dir').value  = cant;
+
+  // Reset toggles
+  editModoDirec = false;
+  editUsaHojas  = true;
+  const btnModo  = document.getElementById('edit-toggle-modo');
+  const btnHojas = document.getElementById('edit-toggle-hojas');
+  btnModo.textContent  = '💰 Precio × Cantidad';
+  btnModo.className    = 'toggle-opt on';
+  btnHojas.textContent = '📄 Usa hojas: Sí';
+  btnHojas.className   = 'toggle-opt on';
+  document.getElementById('edit-modo-normal').style.display  = 'block';
+  document.getElementById('edit-modo-directo').style.display = 'none';
+
+  // Cliente
+  if (cliId) {
+    editCliId = cliId;
+    document.getElementById('edit-cli-nombre').textContent = cliNombre;
+    document.getElementById('edit-cli-pts').textContent    = '';
+    document.getElementById('edit-cli-no-sel').style.display = 'none';
+    document.getElementById('edit-cli-sel').style.display    = 'block';
+  } else {
+    quitarCliEdit();
+  }
+
   calcEditTotal();
   document.getElementById('modal-editar').classList.add('open');
 }
@@ -196,44 +290,145 @@ function cerrarEditar() {
   document.getElementById('modal-editar').classList.remove('open');
 }
 
-function calcEditTotal() {
-  const p = parseFloat(document.getElementById('edit-precio').value) || 0;
-  const q = parseInt(document.getElementById('edit-cant').value)     || 0;
-  document.getElementById('edit-total').textContent = 'S/' + (p * q).toFixed(2);
+// ── Toggles ───────────────────────────────────────────────────
+function editToggleModo() {
+  editModoDirec = !editModoDirec;
+  const btn = document.getElementById('edit-toggle-modo');
+  document.getElementById('edit-modo-normal').style.display  = editModoDirec ? 'none'  : 'block';
+  document.getElementById('edit-modo-directo').style.display = editModoDirec ? 'block' : 'none';
+  btn.textContent = editModoDirec ? '💰 Total directo' : '💰 Precio × Cantidad';
+  btn.className   = 'toggle-opt on';
+  calcEditTotal();
 }
 
-async function guardarEdicion() {
-  const id     = document.getElementById('edit-id').value;
-  const cant   = document.getElementById('edit-cant').value;
-  const precio = document.getElementById('edit-precio').value;
-  const desc   = document.getElementById('edit-desc').value.trim();
+function editToggleHojas() {
+  editUsaHojas = !editUsaHojas;
+  const btn = document.getElementById('edit-toggle-hojas');
+  btn.textContent = `📄 Usa hojas: ${editUsaHojas ? 'Sí' : 'No'}`;
+  btn.className   = `toggle-opt ${editUsaHojas ? 'on' : ''}`;
+}
 
-  if (!cant || cant < 1)    { showFlash('Cantidad inválida', 'error'); return; }
-  if (precio === '' || precio < 0) { showFlash('Precio inválido', 'error'); return; }
+// ── Cálculo total ─────────────────────────────────────────────
+function calcEditTotal() {
+  if (editModoDirec) {
+    const t = parseFloat(document.getElementById('edit-total-dir').value) || 0;
+    document.getElementById('edit-total-display').textContent = 'S/' + t.toFixed(2);
+  } else {
+    const p = parseFloat(document.getElementById('edit-precio').value) || 0;
+    const q = parseInt(document.getElementById('edit-cant').value)     || 0;
+    document.getElementById('edit-total-display').textContent = 'S/' + (p*q).toFixed(2);
+  }
+}
+
+function syncEditDir() { calcEditTotal(); }
+function setEditQ(n) { document.getElementById('edit-cant').value = n; calcEditTotal(); }
+
+// ── Búsqueda de cliente ───────────────────────────────────────
+function buscarCliEdit(q) {
+  clearTimeout(editBuscarTO);
+  if (q.length < 2) { document.getElementById('edit-cli-results').style.display = 'none'; return; }
+  editBuscarTO = setTimeout(async () => {
+    const r    = await fetch(`/crm/buscar?q=${encodeURIComponent(q)}`);
+    const data = await r.json();
+    const box  = document.getElementById('edit-cli-results');
+    box.innerHTML = data.length
+      ? data.map(c => `<div class="cli-item" onclick="selCliEdit(${c.id},'${c.nombre.replace(/'/g,"\\'")}',${c.puntos})">
+          <strong>${c.nombre}</strong>${c.celular ? ` · ${c.celular}` : ''}
+          <span class="badge badge-blue">${c.puntos} pts</span></div>`).join('')
+      : `<div class="cli-item text-muted">No encontrado</div>`;
+    box.style.display = 'block';
+  }, 300);
+}
+
+function selCliEdit(id, nombre, puntos) {
+  editCliId = id;
+  document.getElementById('edit-cli-nombre').textContent = nombre;
+  document.getElementById('edit-cli-pts').textContent    = ` · ${puntos} pts`;
+  document.getElementById('edit-cli-no-sel').style.display = 'none';
+  document.getElementById('edit-cli-sel').style.display    = 'block';
+  document.getElementById('edit-cli-results').style.display= 'none';
+  document.getElementById('edit-cli-buscar').value = '';
+}
+
+function quitarCliEdit() {
+  editCliId = null;
+  document.getElementById('edit-cli-no-sel').style.display = 'block';
+  document.getElementById('edit-cli-sel').style.display    = 'none';
+  document.getElementById('edit-cli-buscar').value         = '';
+  document.getElementById('edit-cli-results').style.display= 'none';
+}
+
+// ── Nuevo cliente desde historial ─────────────────────────────
+function mostrarNuevoCliEdit() {
+  document.getElementById('modal-nuevo-cli-hist').classList.add('open');
+}
+function cerrarNuevoCliHist() {
+  document.getElementById('modal-nuevo-cli-hist').classList.remove('open');
+}
+async function guardarNuevoCliHist() {
+  const nombre  = document.getElementById('nch-nombre').value.trim();
+  const celular = document.getElementById('nch-celular').value.trim();
+  if (!nombre) { showFlash('El nombre es requerido', 'error'); return; }
+  const fd = new FormData();
+  fd.append('nombre', nombre); fd.append('celular', celular);
+  const r    = await fetch('/crm/cliente/nuevo', { method:'POST', body:fd });
+  const data = await r.json();
+  if (data.id) {
+    showFlash(`✓ Cliente "${data.nombre}" creado`, 'success');
+    cerrarNuevoCliHist();
+    selCliEdit(data.id, data.nombre, 0);
+    document.getElementById('nch-nombre').value  = '';
+    document.getElementById('nch-celular').value = '';
+  } else {
+    showFlash(data.error || 'Error', 'error');
+  }
+}
+
+// ── Guardar edición ───────────────────────────────────────────
+async function guardarEdicion() {
+  const id   = document.getElementById('edit-id').value;
+  const desc = document.getElementById('edit-desc').value.trim();
+  let   precio, cant;
+
+  if (editModoDirec) {
+    const total = parseFloat(document.getElementById('edit-total-dir').value);
+    cant        = parseInt(document.getElementById('edit-cant-dir').value) || 1;
+    if (isNaN(total) || total < 0) { showFlash('Ingresa el total', 'error'); return; }
+    precio = total / cant;
+  } else {
+    precio = parseFloat(document.getElementById('edit-precio').value);
+    cant   = parseInt(document.getElementById('edit-cant').value);
+    if (isNaN(precio) || precio < 0) { showFlash('Precio inválido', 'error'); return; }
+    if (!cant || cant < 1)           { showFlash('Cantidad inválida', 'error'); return; }
+  }
 
   const fd = new FormData();
   fd.append('cantidad',    cant);
   fd.append('precio',      precio);
-  fd.append('descripcion', desc);
+  if (desc) fd.append('descripcion', desc);
+  if (editCliId) {
+    fd.append('cliente_id', editCliId);
+  } else {
+    fd.append('quitar_cliente', 'true');
+  }
+  fd.append('usa_hojas', editUsaHojas ? 'true' : 'false');
 
-  const r    = await fetch(`/ventas/editar/${id}`, { method: 'POST', body: fd });
+  const r    = await fetch(`/ventas/editar/${id}`, { method:'POST', body:fd });
   const data = await r.json();
-
   if (data.success) {
     showFlash('✓ Venta actualizada', 'success');
     cerrarEditar();
     setTimeout(() => location.reload(), 1000);
   } else {
-    showFlash(data.error || 'Error al guardar', 'error');
+    showFlash(data.error || 'Error', 'error');
   }
 }
 
+// ── Eliminar ──────────────────────────────────────────────────
 async function eliminarVenta(id, nombre) {
   if (!confirm(`¿Eliminar la venta "${nombre}"?\n\nEsta acción no se puede deshacer.`)) return;
-
-  const r    = await fetch(`/ventas/eliminar/${id}`, { method: 'POST' });
+  const r    = await fetch(`/ventas/eliminar/${id}`, { method:'POST' });
   const data = await r.json();
-
   if (data.success) {
     showFlash('Venta eliminada', 'success');
     const fila = document.getElementById('fila-' + id);
@@ -243,8 +438,11 @@ async function eliminarVenta(id, nombre) {
   }
 }
 
-document.getElementById('modal-editar').addEventListener('click', function(e) {
-  if (e.target === this) cerrarEditar();
+// Cerrar modales al hacer clic fuera
+['modal-editar','modal-nuevo-cli-hist'].forEach(id => {
+  document.getElementById(id).addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
 });
 </script>
 {% endblock %}
