@@ -1,5 +1,93 @@
 {% extends 'base.html' %}
-{% block title %}Historial de ventas{% endblock %}
+{% block title %}Historial de ventas<!-- Modal editar venta -->
+<div class="modal-overlay" id="modal-editar">
+  <div class="modal-box">
+    <div class="modal-title">
+      ✏️ Editar venta
+      <button class="modal-close" onclick="cerrarEditar()">✕</button>
+    </div>
+    <input type="hidden" id="edit-id">
+
+    <div class="form-group">
+      <label>Descripción / Servicio</label>
+      <input type="text" id="edit-desc" placeholder="Nombre del servicio">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label>Precio unitario (S/)</label>
+        <input type="number" id="edit-precio" step="0.01" min="0"
+               style="font-size:18px;font-weight:700;text-align:center"
+               oninput="calcEditTotal()">
+      </div>
+      <div class="form-group">
+        <label>Cantidad</label>
+        <input type="number" id="edit-cant" min="1"
+               style="font-size:18px;font-weight:700;text-align:center"
+               oninput="calcEditTotal()">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Total calculado</label>
+      <div style="font-size:26px;font-weight:900;color:var(--green);text-align:center"
+           id="edit-total">S/0.00</div>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="guardarEdicion()">💾 Guardar cambios</button>
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+function abrirEditar(id, cant, precio, desc) {
+  document.getElementById('edit-id').value     = id;
+  document.getElementById('edit-cant').value   = cant;
+  document.getElementById('edit-precio').value = precio;
+  document.getElementById('edit-desc').value   = desc;
+  calcEditTotal();
+  document.getElementById('modal-editar').classList.add('open');
+}
+function cerrarEditar() {
+  document.getElementById('modal-editar').classList.remove('open');
+}
+function calcEditTotal() {
+  const p = parseFloat(document.getElementById('edit-precio').value) || 0;
+  const q = parseInt(document.getElementById('edit-cant').value)     || 0;
+  document.getElementById('edit-total').textContent = 'S/' + (p*q).toFixed(2);
+}
+async function guardarEdicion() {
+  const id     = document.getElementById('edit-id').value;
+  const cant   = document.getElementById('edit-cant').value;
+  const precio = document.getElementById('edit-precio').value;
+  const desc   = document.getElementById('edit-desc').value;
+  const fd = new FormData();
+  fd.append('cantidad',    cant);
+  fd.append('precio',      precio);
+  fd.append('descripcion', desc);
+  const r    = await fetch(`/ventas/editar/${id}`, { method:'POST', body:fd });
+  const data = await r.json();
+  if (data.success) {
+    showFlash('✓ Venta actualizada', 'success');
+    cerrarEditar();
+    setTimeout(() => location.reload(), 1000);
+  } else {
+    showFlash(data.error || 'Error', 'error');
+  }
+}
+async function eliminarVenta(id, nombre) {
+  if (!confirm(`¿Eliminar la venta "${nombre}"?\n\nEsta acción no se puede deshacer.`)) return;
+  const r    = await fetch(`/ventas/eliminar/${id}`, { method:'POST' });
+  const data = await r.json();
+  if (data.success) {
+    showFlash('Venta eliminada', 'success');
+    setTimeout(() => location.reload(), 1000);
+  } else {
+    showFlash(data.error || 'Error', 'error');
+  }
+}
+document.getElementById('modal-editar').addEventListener('click', function(e) {
+  if (e.target === this) cerrarEditar();
+});
+</script>
+{% endblock %}
 
 {% block head %}
 <style>
@@ -68,6 +156,7 @@
           <th>Total</th>
           <th>Usuario</th>
           <th>Cliente</th>
+          <th>Acciones</th>
         </tr>
       </thead>
       <tbody>
@@ -94,6 +183,16 @@
                 <a href="{{ url_for('ver_cliente', id=v.cliente.id) }}"
                    style="color:var(--blue);text-decoration:none">{{ v.cliente.nombre }}</a>
               {% else %}—{% endif %}
+            </td>
+            <td>
+              <button class="btn btn-sm" style="background:#EEF4FF;color:var(--blue);border:none;margin-bottom:4px"
+                      onclick="abrirEditar({{ v.id }}, {{ v.cantidad }}, {{ v.precio_unitario }}, '{{ (v.descripcion or v.servicio.nombre)|e }}')">
+                ✏️
+              </button>
+              <button class="btn btn-sm" style="background:#FEE2E2;color:#991B1B;border:none"
+                      onclick="eliminarVenta({{ v.id }}, '{{ (v.descripcion or v.servicio.nombre)|e }}')">
+                🗑
+              </button>
             </td>
           </tr>
           {% endfor %}
