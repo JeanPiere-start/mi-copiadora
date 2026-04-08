@@ -5,16 +5,15 @@
 <style>
   .srv-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
   @media (min-width: 520px) { .srv-grid { grid-template-columns: repeat(3, 1fr); } }
-
-  .srv-btn { padding: 18px 10px; border-radius: 14px; border: 2px solid #DDE3EE;
+  .srv-btn { padding: 16px 10px; border-radius: 14px; border: 2px solid #DDE3EE;
              background: var(--card); cursor: pointer; text-align: center;
              transition: all .2s; display: flex; flex-direction: column;
-             align-items: center; gap: 6px; }
+             align-items: center; gap: 5px; }
   .srv-btn:hover, .srv-btn:active { border-color: var(--blue); background: #EEF4FF; }
-  .srv-btn .srv-ico  { font-size: 26px; }
-  .srv-btn .srv-name { font-size: 12px; font-weight: 600; color: var(--text);
-                       line-height: 1.3; }
-  .srv-btn .srv-price { font-size: 15px; font-weight: 800; color: var(--green); }
+  .srv-btn .srv-ico   { font-size: 24px; }
+  .srv-btn .srv-name  { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.3; }
+  .srv-btn .srv-price { font-size: 13px; font-weight: 800; color: var(--green); }
+  .srv-btn .srv-disc  { font-size: 10px; color: var(--warn); font-weight: 600; }
 
   .turno-bar { background: linear-gradient(90deg, var(--blue), #0F5FCF);
                color: #fff; border-radius: var(--radius); padding: 14px 18px;
@@ -22,14 +21,26 @@
                margin-bottom: 16px; }
   .turno-bar .lbl { font-size: 13px; opacity: .85; }
   .turno-bar .val { font-size: 26px; font-weight: 800; }
-
   .ultimas-list { list-style: none; }
-  .ultimas-list li { display: flex; justify-content: space-between;
-                     align-items: center; padding: 10px 0;
-                     border-bottom: 1px solid var(--border); font-size: 13px; }
+  .ultimas-list li { display: flex; justify-content: space-between; align-items: center;
+                     padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
   .ultimas-list li:last-child { border: none; }
 
-  /* Client search */
+  /* Nivel selector */
+  .nivel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .nivel-btn  { padding: 10px 8px; border: 2px solid var(--border); border-radius: 10px;
+                background: var(--card); cursor: pointer; text-align: center; transition: all .2s; }
+  .nivel-btn:hover, .nivel-btn.sel { border-color: var(--green); background: #F0FFF8; }
+  .nivel-btn .nnom  { font-size: 13px; font-weight: 700; }
+  .nivel-btn .nprec { font-size: 15px; font-weight: 900; color: var(--green); }
+
+  /* Discount badge */
+  .disc-badge { background: #FFF7ED; border: 1px solid #FCD34D; border-radius: 10px;
+                padding: 8px 12px; font-size: 13px; color: #92400E; margin-bottom: 10px;
+                display: none; }
+  .disc-badge.show { display: block; }
+
+  /* Cliente search */
   .cliente-search { position: relative; }
   .cliente-results { position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
                      background: var(--card); border: 2px solid var(--blue);
@@ -62,17 +73,20 @@
 <div class="card">
   <div class="card-title">🛎 Selecciona un servicio</div>
   <div class="srv-grid">
-    {% set iconos = {'Copia B&N texto':'📄','Copia B&N con imagen':'🖼','Copia a color':'🌈',
-                     'Impresión B&N':'🖨','Impresión a color':'🎨','Escaneo':'📷',
-                     'Foto carné (hoja x6)':'📸','Llenado de formulario':'📝'} %}
+    {% set iconos = {'Copia B&N':'📄','Copia color':'🌈','Impresión B&N':'🖨',
+                     'Impresión color':'🎨','Escaneo':'📷','Foto carné (x6)':'📸',
+                     'Llenado formulario':'📝'} %}
     {% for s in servicios %}
-    <button class="srv-btn" onclick="abrirModal({{ s.id }}, '{{ s.nombre|e }}', {{ s.precio }}, {{ 'true' if s.precio == 0 else 'false' }})">
+    <button class="srv-btn" onclick="abrirModal({{ s.id }}, '{{ s.nombre|e }}', {{ s.precio }}, {{ 'true' if s.precio == 0 else 'false' }}, {{ 'true' if s.descuento_volumen else 'false' }})">
       <span class="srv-ico">{{ iconos.get(s.nombre, '📋') }}</span>
       <span class="srv-name">{{ s.nombre }}</span>
       {% if s.precio == 0 %}
-        <span class="srv-price" style="color:var(--warn);font-size:12px">Precio variable</span>
+        <span class="srv-price" style="color:var(--warn);font-size:11px">Precio variable</span>
       {% else %}
-        <span class="srv-price">S/{{ "%.2f"|format(s.precio) }}</span>
+        <span class="srv-price">desde S/{{ "%.2f"|format(s.precio) }}</span>
+      {% endif %}
+      {% if s.descuento_volumen %}
+        <span class="srv-disc">🏷 -8% desde 10 uds</span>
       {% endif %}
     </button>
     {% endfor %}
@@ -86,7 +100,7 @@
   </div>
 </div>
 
-<!-- Últimas ventas del turno -->
+<!-- Últimas ventas -->
 <div class="card">
   <div class="card-title">🕑 Últimas ventas del turno</div>
   {% if ultimas %}
@@ -94,10 +108,12 @@
     {% for v in ultimas %}
     <li>
       <span>
-        <strong>{{ v.servicio.nombre }}</strong>
+        <strong>{{ v.descripcion or v.servicio.nombre }}</strong>
+        {% if v.nivel_nombre %}<span class="badge badge-gray">{{ v.nivel_nombre }}</span>{% endif %}
         <span class="text-muted"> x{{ v.cantidad }}</span>
+        {% if v.descuento %}<span class="badge badge-blue">-{{ v.descuento|int }}%</span>{% endif %}
         {% if v.cliente %}<span class="badge badge-green">👤 {{ v.cliente.nombre }}</span>{% endif %}
-        {% if v.es_canje %}<span class="badge badge-blue">🎁 Canje</span>{% endif %}
+        {% if v.es_canje %}<span class="badge badge-blue">🎁</span>{% endif %}
       </span>
       <span class="monto">S/{{ "%.2f"|format(v.total) }}</span>
     </li>
@@ -108,135 +124,39 @@
   {% endif %}
 </div>
 
-<!-- ── MODAL PERSONALIZADA ── -->
-<div class="modal-overlay" id="modal-pers">
-  <div class="modal-box">
-    <div class="modal-title">
-      ✏️ Venta personalizada
-      <button class="modal-close" onclick="cerrarPersonalizada()">✕</button>
-    </div>
-
-    <div class="form-group">
-      <label>¿Qué servicio o producto fue? *</label>
-      <input type="text" id="pers-desc"
-             placeholder="Ej: Tipeo + Impresión a color, Sticker A4, Recarga Bitel…"
-             style="font-size:15px">
-      <div style="font-size:12px;color:var(--muted);margin-top:4px">
-        Escríbelo como quieras — aparecerá exactamente así en el historial
-      </div>
-    </div>
-
-    <!-- Precio manual (solo para servicios con precio variable) -->
-    <div class="form-group" id="precio-manual-row" style="display:none">
-      <label>💰 Precio a cobrar (S/)</label>
-      <input type="number" id="modal-precio-manual" min="0" step="0.10"
-             placeholder="Ej: 5.00, 10.00, 25.00…"
-             oninput="calcTotal()"
-             style="font-size:22px;font-weight:700;text-align:center;color:var(--green)">
-      <div style="font-size:12px;color:var(--muted);margin-top:3px">
-        Este servicio no tiene precio fijo — ingresa el monto según lo acordado
-      </div>
-    </div>
-
-    <!-- Cliente (opcional) -->
-    <div class="form-group">
-      <label>👤 Cliente (opcional)</label>
-      <div id="pers-cli-no-sel">
-        <div class="cliente-search">
-          <input type="text" id="pers-cli-buscar" placeholder="Buscar por nombre o celular…"
-                 oninput="buscarClientePers(this.value)" autocomplete="off">
-          <div class="cliente-results" id="pers-cli-results"></div>
-        </div>
-        <div class="mt-2">
-          <button type="button" class="btn btn-outline btn-sm" onclick="mostrarNuevoCliPers()">
-            + Nuevo cliente
-          </button>
-        </div>
-      </div>
-      <div id="pers-cli-sel" style="display:none">
-        <div class="cliente-selected">
-          <div>
-            <strong id="pers-sel-nombre">—</strong>
-            <span class="text-muted" id="pers-sel-puntos"></span>
-          </div>
-          <button type="button" class="btn btn-sm" style="background:#EEF4FF;color:var(--blue)"
-                  onclick="limpiarClientePers()">✕ Quitar</button>
-        </div>
-      </div>
-    </div>
-
-    <hr>
-
-    <!-- Toggle: precio fijo o precio total directo -->
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <button type="button" id="toggle-modo-precio" class="btn btn-sm"
-              style="background:#EEF4FF;color:var(--blue);border:2px solid var(--blue)"
-              onclick="toggleModoPrecio()">
-        💰 Modo: Precio × Cantidad
-      </button>
-      <button type="button" id="toggle-hojas" class="btn btn-sm"
-              style="background:#EEF4FF;color:var(--blue);border:2px solid var(--blue)"
-              onclick="toggleHojas()">
-        📄 Usa hojas: Sí
-      </button>
-    </div>
-
-    <!-- Modo precio × cantidad -->
-    <div id="modo-por-cantidad">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
-        <div class="form-group" style="margin:0">
-          <label>Precio unitario (S/)</label>
-          <input type="number" id="pers-precio" min="0" step="0.10"
-                 placeholder="0.00" oninput="calcTotalPers()"
-                 style="font-size:20px;font-weight:700;text-align:center">
-        </div>
-        <div class="form-group" style="margin:0">
-          <label>Cantidad</label>
-          <input type="number" id="pers-cant" min="1" value="1"
-                 oninput="calcTotalPers()"
-                 style="font-size:20px;font-weight:700;text-align:center">
-        </div>
-      </div>
-      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-        {% for q in [1,2,5,10,20,50] %}
-        <button type="button" class="btn btn-outline btn-sm" onclick="setPersQ({{ q }})">{{ q }}</button>
-        {% endfor %}
-      </div>
-    </div>
-
-    <!-- Modo total directo -->
-    <div id="modo-total-directo" style="display:none">
-      <div class="form-group">
-        <label>Total a cobrar (S/) — precio y cantidad libres</label>
-        <input type="number" id="pers-total-directo" min="0" step="0.50"
-               placeholder="Ej: 5.00" oninput="syncTotalDirecto()"
-               style="font-size:24px;font-weight:700;text-align:center;color:var(--green)">
-      </div>
-      <div class="form-group">
-        <label>Cantidad <span style="font-weight:400;color:var(--muted)">(para el historial)</span></label>
-        <input type="number" id="pers-cant-directo" min="1" value="1"
-               style="font-size:18px;font-weight:700;text-align:center">
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label>Total</label>
-      <div style="font-size:30px;font-weight:900;color:var(--green);text-align:center"
-           id="pers-total">S/0.00</div>
-    </div>
-
-    <button class="btn btn-success btn-full" id="btn-pers" onclick="registrarPersonalizada()">
-      ✓ Registrar venta
-    </button>
-  </div>
-</div>
-
-<!-- ── MODAL ── -->
+<!-- ── MODAL SERVICIO PRINCIPAL ── -->
 <div class="modal-overlay" id="modal">
-  <div class="modal-box">
+  <div class="modal-box" style="max-height:92vh;overflow-y:auto">
     <div class="modal-title">
       <span id="modal-srv-name">Servicio</span>
       <button class="modal-close" onclick="cerrarModal()">✕</button>
+    </div>
+
+    <!-- Niveles de precio -->
+    <div id="niveles-section" style="display:none">
+      <label style="font-size:13px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">
+        Tipo / Nivel
+      </label>
+      <div class="nivel-grid" id="niveles-grid"></div>
+    </div>
+
+    <!-- Precio manual (variable o override) -->
+    <div class="form-group" id="precio-manual-row" style="display:none">
+      <label>💰 Precio a cobrar (S/)</label>
+      <input type="number" id="modal-precio-manual" min="0" step="0.10"
+             placeholder="Ingresa el monto…" oninput="calcTotal()"
+             style="font-size:22px;font-weight:700;text-align:center;color:var(--green)">
+    </div>
+
+    <!-- Override de precio cuando hay niveles -->
+    <div id="precio-override-row" style="display:none;margin-bottom:10px">
+      <button type="button" class="btn btn-outline btn-sm" onclick="toggleOverride()"
+              id="btn-override">✏️ Ingresar precio especial</button>
+      <div id="override-input" style="display:none;margin-top:8px">
+        <input type="number" id="modal-precio-override" min="0" step="0.10"
+               placeholder="Precio especial (S/)…" oninput="calcTotal()"
+               style="font-size:18px;font-weight:700;text-align:center">
+      </div>
     </div>
 
     <!-- Cliente (opcional) -->
@@ -249,7 +169,7 @@
           <div class="cliente-results" id="cliente-results"></div>
         </div>
         <div class="mt-2">
-          <button type="button" class="btn btn-outline btn-sm" onclick="mostrarNuevoCliente()">
+          <button type="button" class="btn btn-outline btn-sm" onclick="mostrarNuevoCliente('modal')">
             + Nuevo cliente
           </button>
         </div>
@@ -269,25 +189,34 @@
     <!-- Canje de puntos -->
     <div id="canje-section" style="display:none" class="alert alert-success mt-2">
       🎁 Este cliente tiene <strong id="canje-puntos">0</strong> puntos.
-      Con 10 puntos = 1 copia gratis.
       <button type="button" class="btn btn-success btn-sm mt-2 btn-full"
               onclick="canjearPuntos()">Canjear 10 puntos → Copia gratis</button>
     </div>
 
     <hr>
 
+    <!-- Descuento volumen -->
+    <div class="disc-badge" id="disc-badge">
+      🏷 <strong>Descuento por volumen 8%</strong> aplicado (10+ unidades)
+    </div>
+
     <!-- Cantidad -->
     <div class="form-group">
       <label>Cantidad</label>
-      <input type="number" id="modal-cant" min="1" value="1"
-             oninput="calcTotal()" style="font-size:24px;font-weight:700;text-align:center">
+      <input type="number" id="modal-cant" min="1" value="1" oninput="calcTotal()"
+             style="font-size:24px;font-weight:700;text-align:center">
     </div>
-
-    <!-- Teclado rápido de cantidades -->
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
       {% for q in [1,5,10,20,50,100] %}
       <button type="button" class="btn btn-outline btn-sm" onclick="setCant({{ q }})">{{ q }}</button>
       {% endfor %}
+    </div>
+
+    <!-- Nota opcional -->
+    <div class="form-group">
+      <label>📝 Nota (opcional)</label>
+      <input type="text" id="modal-nota" placeholder="Ej: cliente pidió factura, entrega mañana…"
+             style="font-size:14px">
     </div>
 
     <div class="form-group">
@@ -302,7 +231,112 @@
   </div>
 </div>
 
-<!-- Modal nuevo cliente -->
+<!-- ── MODAL PERSONALIZADA ── -->
+<div class="modal-overlay" id="modal-pers">
+  <div class="modal-box" style="max-height:92vh;overflow-y:auto">
+    <div class="modal-title">
+      ✏️ Venta personalizada
+      <button class="modal-close" onclick="cerrarPersonalizada()">✕</button>
+    </div>
+
+    <div class="form-group">
+      <label>¿Qué servicio o producto fue? *</label>
+      <input type="text" id="pers-desc"
+             placeholder="Ej: Tipeo + Impresión a color, Sticker A4…">
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">
+        Escríbelo como quieras — aparecerá exactamente así en el historial
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>👤 Cliente (opcional)</label>
+      <div id="pers-cli-no-sel">
+        <div class="cliente-search">
+          <input type="text" id="pers-cli-buscar" placeholder="Buscar por nombre o celular…"
+                 oninput="buscarClientePers(this.value)" autocomplete="off">
+          <div class="cliente-results" id="pers-cli-results"></div>
+        </div>
+        <div class="mt-2">
+          <button type="button" class="btn btn-outline btn-sm" onclick="mostrarNuevoCliente('pers')">
+            + Nuevo cliente
+          </button>
+        </div>
+      </div>
+      <div id="pers-cli-sel" style="display:none">
+        <div class="cliente-selected">
+          <div><strong id="pers-sel-nombre">—</strong>
+               <span class="text-muted" id="pers-sel-puntos"></span></div>
+          <button type="button" class="btn btn-sm" style="background:#EEF4FF;color:var(--blue)"
+                  onclick="limpiarClientePers()">✕ Quitar</button>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <button type="button" id="toggle-modo-precio" class="btn btn-sm"
+              style="background:#EEF4FF;color:var(--blue);border:2px solid var(--blue)"
+              onclick="toggleModoPrecio()">💰 Precio × Cantidad</button>
+      <button type="button" id="toggle-hojas" class="btn btn-sm"
+              style="background:#EEF4FF;color:var(--blue);border:2px solid var(--blue)"
+              onclick="toggleHojas()">📄 Usa hojas: Sí</button>
+    </div>
+
+    <div id="modo-por-cantidad">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
+        <div class="form-group" style="margin:0">
+          <label>Precio unitario (S/)</label>
+          <input type="number" id="pers-precio" min="0" step="0.10" placeholder="0.00"
+                 oninput="calcTotalPers()" style="font-size:20px;font-weight:700;text-align:center">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label>Cantidad</label>
+          <input type="number" id="pers-cant" min="1" value="1"
+                 oninput="calcTotalPers()" style="font-size:20px;font-weight:700;text-align:center">
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+        {% for q in [1,2,5,10,20,50] %}
+        <button type="button" class="btn btn-outline btn-sm" onclick="setPersQ({{ q }})">{{ q }}</button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div id="modo-total-directo" style="display:none">
+      <div class="form-group">
+        <label>Total a cobrar (S/)</label>
+        <input type="number" id="pers-total-directo" min="0" step="0.50"
+               placeholder="Ej: 5.00" oninput="syncTotalDirecto()"
+               style="font-size:24px;font-weight:700;text-align:center;color:var(--green)">
+      </div>
+      <div class="form-group">
+        <label>Cantidad <span style="font-weight:400;color:var(--muted)">(para historial)</span></label>
+        <input type="number" id="pers-cant-directo" min="1" value="1"
+               style="font-size:18px;font-weight:700;text-align:center">
+      </div>
+    </div>
+
+    <!-- Nota -->
+    <div class="form-group">
+      <label>📝 Nota (opcional)</label>
+      <input type="text" id="pers-nota" placeholder="Ej: urgente, en papel A3…"
+             style="font-size:14px">
+    </div>
+
+    <div class="form-group">
+      <label>Total</label>
+      <div style="font-size:30px;font-weight:900;color:var(--green);text-align:center"
+           id="pers-total">S/0.00</div>
+    </div>
+
+    <button class="btn btn-success btn-full" id="btn-pers" onclick="registrarPersonalizada()">
+      ✓ Registrar venta
+    </button>
+  </div>
+</div>
+
+<!-- Modal nuevo cliente (reutilizado) -->
 <div class="modal-overlay" id="modal-nuevo-cli">
   <div class="modal-box">
     <div class="modal-title">
@@ -310,90 +344,147 @@
       <button class="modal-close" onclick="cerrarNuevoCli()">✕</button>
     </div>
     <div class="form-group">
-      <label>Nombre</label>
+      <label>Nombre completo *</label>
       <input type="text" id="nc-nombre" placeholder="Nombre completo">
     </div>
     <div class="form-group">
       <label>Celular (opcional)</label>
       <input type="tel" id="nc-celular" placeholder="999 000 000">
     </div>
-    <button class="btn btn-success btn-full" onclick="guardarNuevoCliente()">
-      Guardar cliente
-    </button>
+    <button class="btn btn-success btn-full" onclick="guardarNuevoCliente()">Guardar cliente</button>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-let modalSrvId     = null;
-let modalSrvPrecio = 0;
-let modalPrecioVar = false;
-let clienteId      = null;
+// ── Estado global ─────────────────────────────────────────────
+let modalSrvId      = null;
+let modalSrvPrecio  = 0;
+let modalPrecioVar  = false;
+let modalDescVol    = false;
+let modalNivelId    = null;
+let modalNivelPrecio= 0;
+let modalOverride   = false;
+let clienteId       = null;
+let persClienteId   = null;
+let persModoDirec   = false;
+let persUsaHojas    = true;
+let _nuevoCliTarget = null;
 
-function abrirModal(id, nombre, precio, precioVariable) {
+// ── Modal servicio ────────────────────────────────────────────
+async function abrirModal(id, nombre, precio, precioVariable, descVol) {
   modalSrvId       = id;
   modalSrvPrecio   = precio;
   modalPrecioVar   = !!precioVariable;
+  modalDescVol     = !!descVol;
+  modalNivelId     = null;
+  modalNivelPrecio = precio;
+  modalOverride    = false;
+
   document.getElementById('modal-srv-name').textContent = nombre;
   document.getElementById('modal-cant').value  = 1;
+  document.getElementById('modal-nota').value  = '';
+  document.getElementById('modal-precio-manual').value   = '';
+  document.getElementById('modal-precio-override').value = '';
+  document.getElementById('override-input').style.display = 'none';
+  document.getElementById('btn-override').textContent = '✏️ Ingresar precio especial';
 
-  // Mostrar/ocultar campo de precio manual
-  const precioRow = document.getElementById('precio-manual-row');
-  const precioInp = document.getElementById('modal-precio-manual');
-  if (modalPrecioVar) {
-    precioRow.style.display = 'block';
-    precioInp.value = '';
-    document.getElementById('modal-total').textContent = 'S/0.00';
-  } else {
-    precioRow.style.display = 'none';
-    precioInp.value = '';
+  // Limpiar niveles previos
+  document.getElementById('niveles-grid').innerHTML = '';
+  document.getElementById('niveles-section').style.display    = 'none';
+  document.getElementById('precio-override-row').style.display= 'none';
+  document.getElementById('precio-manual-row').style.display  = modalPrecioVar ? 'block' : 'none';
+
+  // Cargar niveles del servicio
+  const r    = await fetch(`/servicios/niveles/${id}`);
+  const data = await r.json();
+
+  if (data.niveles && data.niveles.length > 0) {
+    const grid = document.getElementById('niveles-grid');
+    data.niveles.forEach((n, i) => {
+      const btn = document.createElement('button');
+      btn.type      = 'button';
+      btn.className = 'nivel-btn' + (i === 0 ? ' sel' : '');
+      btn.innerHTML = `<div class="nnom">${n.nombre}</div><div class="nprec">S/${n.precio.toFixed(2)}</div>`;
+      btn.onclick   = () => selNivel(n.id, n.precio, btn);
+      grid.appendChild(btn);
+    });
+    // Seleccionar el primero por defecto
+    const firstNivel = data.niveles[0];
+    modalNivelId     = firstNivel.id;
+    modalNivelPrecio = firstNivel.precio;
+    document.getElementById('niveles-section').style.display    = 'block';
+    document.getElementById('precio-override-row').style.display= 'block';
+    document.getElementById('precio-manual-row').style.display  = 'none';
   }
 
   limpiarCliente();
   calcTotal();
   document.getElementById('modal').classList.add('open');
-  setTimeout(() => {
-    if (modalPrecioVar) precioInp.focus();
-    else document.getElementById('modal-cant').focus();
-  }, 200);
+  setTimeout(() => document.getElementById('modal-cant').focus(), 200);
 }
 
-function cerrarModal() {
-  document.getElementById('modal').classList.remove('open');
-}
-
-function setCant(n) {
-  document.getElementById('modal-cant').value = n;
+function selNivel(nivelId, precio, btn) {
+  document.querySelectorAll('.nivel-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  modalNivelId     = nivelId;
+  modalNivelPrecio = precio;
+  // Reset override
+  modalOverride = false;
+  document.getElementById('override-input').style.display = 'none';
+  document.getElementById('btn-override').textContent = '✏️ Ingresar precio especial';
+  document.getElementById('modal-precio-override').value = '';
   calcTotal();
 }
 
-function calcTotal() {
-  const cant   = parseInt(document.getElementById('modal-cant').value) || 0;
-  let   precio = modalSrvPrecio;
-  if (modalPrecioVar) {
-    precio = parseFloat(document.getElementById('modal-precio-manual').value) || 0;
-  }
-  document.getElementById('modal-total').textContent = 'S/' + (cant * precio).toFixed(2);
+function toggleOverride() {
+  modalOverride = !modalOverride;
+  document.getElementById('override-input').style.display = modalOverride ? 'block' : 'none';
+  document.getElementById('btn-override').textContent = modalOverride
+    ? '✕ Usar precio del nivel' : '✏️ Ingresar precio especial';
+  if (!modalOverride) document.getElementById('modal-precio-override').value = '';
+  calcTotal();
 }
 
-// ── CLIENTE ──────────────────────────────────────
+function cerrarModal() { document.getElementById('modal').classList.remove('open'); }
 
+function setCant(n) { document.getElementById('modal-cant').value = n; calcTotal(); }
+
+function calcTotal() {
+  const cant = parseInt(document.getElementById('modal-cant').value) || 0;
+  let precio;
+
+  if (modalPrecioVar) {
+    precio = parseFloat(document.getElementById('modal-precio-manual').value) || 0;
+  } else if (modalOverride) {
+    precio = parseFloat(document.getElementById('modal-precio-override').value) || modalNivelPrecio;
+  } else {
+    precio = modalNivelPrecio || modalSrvPrecio;
+  }
+
+  // Descuento por volumen
+  const descuento   = (modalDescVol && cant >= 10) ? 0.08 : 0;
+  const subtotal    = precio * cant;
+  const total       = subtotal * (1 - descuento);
+  const badge       = document.getElementById('disc-badge');
+  badge.className   = 'disc-badge' + (descuento > 0 ? ' show' : '');
+  document.getElementById('modal-total').textContent = 'S/' + total.toFixed(2);
+}
+
+// ── Cliente ───────────────────────────────────────────────────
 let buscarTimeout = null;
 function buscarCliente(q) {
   clearTimeout(buscarTimeout);
-  if (q.length < 2) { document.getElementById('cliente-results').style.display='none'; return; }
+  if (q.length < 2) { document.getElementById('cliente-results').style.display = 'none'; return; }
   buscarTimeout = setTimeout(async () => {
-    const r = await fetch(`/crm/buscar?q=${encodeURIComponent(q)}`);
+    const r    = await fetch(`/crm/buscar?q=${encodeURIComponent(q)}`);
     const data = await r.json();
     const box  = document.getElementById('cliente-results');
     box.innerHTML = data.length
-      ? data.map(c =>
-          `<div class="cliente-result-item" onclick="seleccionarCliente(${c.id},'${c.nombre.replace(/'/g,"\\'")}',${c.puntos})">
-             <strong>${c.nombre}</strong>
-             ${c.celular ? `<span class="text-muted"> · ${c.celular}</span>` : ''}
-             <span class="badge badge-blue">${c.puntos} pts</span>
-           </div>`).join('')
+      ? data.map(c => `<div class="cliente-result-item" onclick="seleccionarCliente(${c.id},'${c.nombre.replace(/'/g,"\\'")}',${c.puntos})">
+          <strong>${c.nombre}</strong>${c.celular?` · ${c.celular}`:''}
+          <span class="badge badge-blue">${c.puntos} pts</span></div>`).join('')
       : `<div class="cliente-result-item text-muted">No encontrado</div>`;
     box.style.display = 'block';
   }, 300);
@@ -407,12 +498,9 @@ function seleccionarCliente(id, nombre, puntos) {
   document.getElementById('cliente-sel').style.display    = 'block';
   document.getElementById('cliente-results').style.display= 'none';
   document.getElementById('cliente-buscar').value = '';
-
   const cs = document.getElementById('canje-section');
-  if (puntos >= 10) {
-    document.getElementById('canje-puntos').textContent = puntos;
-    cs.style.display = 'block';
-  } else { cs.style.display = 'none'; }
+  if (puntos >= 10) { document.getElementById('canje-puntos').textContent = puntos; cs.style.display = 'block'; }
+  else cs.style.display = 'none';
 }
 
 function limpiarCliente() {
@@ -424,25 +512,17 @@ function limpiarCliente() {
   document.getElementById('canje-section').style.display  = 'none';
 }
 
-// ── CANJE ────────────────────────────────────────
-
+// ── Canje ─────────────────────────────────────────────────────
 async function canjearPuntos() {
   if (!clienteId) return;
-  const fd = new FormData();
-  fd.append('cliente_id', clienteId);
-  const r    = await fetch('/ventas/canjear', { method:'POST', body: fd });
+  const fd = new FormData(); fd.append('cliente_id', clienteId);
+  const r    = await fetch('/ventas/canjear', { method:'POST', body:fd });
   const data = await r.json();
-  if (data.success) {
-    showFlash(`🎁 Canje exitoso. Puntos restantes: ${data.puntos_restantes}`, 'success');
-    agregarUltimaVenta('Copia gratis (canje)', 1, 0);
-    cerrarModal();
-  } else {
-    showFlash(data.error, 'error');
-  }
+  if (data.success) { showFlash(`🎁 Canje OK. Puntos: ${data.puntos_restantes}`, 'success'); agregarUltimaVenta('Copia gratis (canje)',1,0); cerrarModal(); }
+  else showFlash(data.error, 'error');
 }
 
-// ── REGISTRAR VENTA ──────────────────────────────
-
+// ── Registrar venta ───────────────────────────────────────────
 async function registrarVenta() {
   const cant = parseInt(document.getElementById('modal-cant').value);
   if (!cant || cant <= 0) { showFlash('Ingresa una cantidad válida', 'error'); return; }
@@ -454,44 +534,42 @@ async function registrarVenta() {
   fd.append('servicio_id', modalSrvId);
   fd.append('cantidad',    cant);
   if (clienteId) fd.append('cliente_id', clienteId);
+
+  const nota = document.getElementById('modal-nota').value.trim();
+  if (nota) fd.append('nota', nota);
+
   if (modalPrecioVar) {
     const pm = parseFloat(document.getElementById('modal-precio-manual').value);
-    if (!pm || pm <= 0) { showFlash('Ingresa el precio a cobrar', 'error'); btn.disabled=false; btn.textContent='✓ Registrar venta'; return; }
+    if (!pm || pm < 0) { showFlash('Ingresa el precio', 'error'); btn.disabled=false; btn.textContent='✓ Registrar venta'; return; }
     fd.append('precio_manual', pm);
+  } else if (modalOverride) {
+    const po = parseFloat(document.getElementById('modal-precio-override').value);
+    if (po >= 0) fd.append('precio_manual', po);
+  } else if (modalNivelId) {
+    fd.append('nivel_id', modalNivelId);
   }
 
   try {
-    const r    = await fetch('/ventas/registrar', { method:'POST', body: fd });
+    const r    = await fetch('/ventas/registrar', { method:'POST', body:fd });
     const data = await r.json();
     if (data.success) {
       const total = parseFloat(data.total);
-      // Actualizar total del turno
       const barVal = document.querySelector('.turno-bar .val');
-      const actual = parseFloat(barVal.textContent.replace('S/','')) + total;
-      barVal.textContent = 'S/' + actual.toFixed(2);
-
+      barVal.textContent = 'S/' + (parseFloat(barVal.textContent.replace('S/','')) + total).toFixed(2);
       agregarUltimaVenta(data.servicio, data.cantidad, total);
-
       let msg = `✓ ${data.servicio} x${data.cantidad} = S/${total.toFixed(2)}`;
-      if (data.puntos_ganados > 0)
-        msg += ` | +${data.puntos_ganados} puntos al cliente`;
+      if (data.descuento > 0) msg += ` (−${data.descuento}% vol.)`;
+      if (data.puntos_ganados > 0) msg += ` | +${data.puntos_ganados} pts`;
       showFlash(msg, 'success');
       cerrarModal();
-    } else {
-      showFlash(data.error || 'Error al registrar', 'error');
-    }
-  } catch(e) {
-    showFlash('Error de conexión', 'error');
-  }
+    } else { showFlash(data.error || 'Error', 'error'); }
+  } catch(e) { showFlash('Error de conexión', 'error'); }
   btn.disabled = false; btn.textContent = '✓ Registrar venta';
 }
 
 function agregarUltimaVenta(nombre, cant, total) {
-  const ul = document.getElementById('ultimas-list');
-  if (!ul) {
-    // si no existe, recargar la página para mostrar la lista
-    return;
-  }
+  let ul = document.getElementById('ultimas-list');
+  if (!ul) return;
   const li = document.createElement('li');
   li.innerHTML = `<span><strong>${nombre}</strong><span class="text-muted"> x${cant}</span></span>
                   <span class="monto">S/${total.toFixed(2)}</span>`;
@@ -499,141 +577,68 @@ function agregarUltimaVenta(nombre, cant, total) {
   if (ul.children.length > 5) ul.lastChild.remove();
 }
 
-// ── NUEVO CLIENTE ────────────────────────────────
-
-function mostrarNuevoCliente() {
-  document.getElementById('modal-nuevo-cli').classList.add('open');
-}
-function cerrarNuevoCli() {
-  document.getElementById('modal-nuevo-cli').classList.remove('open');
-}
-
-async function guardarNuevoCliente() {
-  const nombre  = document.getElementById('nc-nombre').value.trim();
-  const celular = document.getElementById('nc-celular').value.trim();
-  if (!nombre) { showFlash('El nombre es requerido', 'error'); return; }
-
-  const fd = new FormData();
-  fd.append('nombre',  nombre);
-  fd.append('celular', celular);
-
-  const r    = await fetch('/crm/cliente/nuevo', { method:'POST', body: fd });
-  const data = await r.json();
-  if (data.id) {
-    showFlash(`Cliente "${data.nombre}" creado`, 'success');
-    cerrarNuevoCli();
-    seleccionarCliente(data.id, data.nombre, 0);
-    document.getElementById('nc-nombre').value  = '';
-    document.getElementById('nc-celular').value = '';
-  } else {
-    showFlash(data.error || 'Error', 'error');
-  }
-}
-
-// Cerrar modal al hacer clic fuera
-document.getElementById('modal').addEventListener('click', function(e) {
-  if (e.target === this) cerrarModal();
-});
-document.getElementById('modal-nuevo-cli').addEventListener('click', function(e) {
-  if (e.target === this) cerrarNuevoCli();
-});
-document.getElementById('modal-pers').addEventListener('click', function(e) {
-  if (e.target === this) cerrarPersonalizada();
-});
-
-// ── VENTA PERSONALIZADA ──────────────────────────────────────
-
-let persClienteId = null;
-
-let persUsaHojas  = true;
-let persModoDirec = false;
-
-function toggleHojas() {
-  persUsaHojas = !persUsaHojas;
-  const btn = document.getElementById('toggle-hojas');
-  btn.textContent = `📄 Usa hojas: ${persUsaHojas ? 'Sí' : 'No'}`;
-  btn.style.background = persUsaHojas ? '#EEF4FF' : '#F3F4F6';
-  btn.style.color      = persUsaHojas ? 'var(--blue)' : 'var(--muted)';
-}
-
-function toggleModoPrecio() {
-  persModoDirec = !persModoDirec;
-  const btn = document.getElementById('toggle-modo-precio');
-  document.getElementById('modo-por-cantidad').style.display  = persModoDirec ? 'none'  : 'block';
-  document.getElementById('modo-total-directo').style.display = persModoDirec ? 'block' : 'none';
-  btn.textContent = persModoDirec ? '💰 Modo: Total directo' : '💰 Modo: Precio × Cantidad';
-  calcTotalPers();
-}
-
-function syncTotalDirecto() {
-  const t = parseFloat(document.getElementById('pers-total-directo').value) || 0;
-  document.getElementById('pers-total').textContent = 'S/' + t.toFixed(2);
-}
-
+// ── Personalizada ─────────────────────────────────────────────
 function abrirPersonalizada() {
-  document.getElementById('pers-desc').value   = '';
-  document.getElementById('pers-precio').value = '';
-  document.getElementById('pers-cant').value   = '1';
-  document.getElementById('pers-total').textContent = 'S/0.00';
-  // Reset toggles
-  persUsaHojas  = true;
-  persModoDirec = false;
-  document.getElementById('toggle-hojas').textContent     = '📄 Usa hojas: Sí';
-  document.getElementById('toggle-hojas').style.background= '#EEF4FF';
-  document.getElementById('toggle-hojas').style.color     = 'var(--blue)';
-  document.getElementById('toggle-modo-precio').textContent = '💰 Modo: Precio × Cantidad';
+  ['pers-desc','pers-precio','pers-nota'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('pers-cant').value          = '1';
+  document.getElementById('pers-total').textContent   = 'S/0.00';
+  persModoDirec = false; persUsaHojas = true;
+  document.getElementById('toggle-modo-precio').textContent = '💰 Precio × Cantidad';
+  document.getElementById('toggle-hojas').textContent       = '📄 Usa hojas: Sí';
   document.getElementById('modo-por-cantidad').style.display  = 'block';
   document.getElementById('modo-total-directo').style.display = 'none';
   limpiarClientePers();
   document.getElementById('modal-pers').classList.add('open');
   setTimeout(() => document.getElementById('pers-desc').focus(), 200);
 }
+function cerrarPersonalizada() { document.getElementById('modal-pers').classList.remove('open'); }
 
-function cerrarPersonalizada() {
-  document.getElementById('modal-pers').classList.remove('open');
+function toggleModoPrecio() {
+  persModoDirec = !persModoDirec;
+  document.getElementById('modo-por-cantidad').style.display  = persModoDirec ? 'none'  : 'block';
+  document.getElementById('modo-total-directo').style.display = persModoDirec ? 'block' : 'none';
+  document.getElementById('toggle-modo-precio').textContent   = persModoDirec ? '💰 Total directo' : '💰 Precio × Cantidad';
+  calcTotalPers();
 }
-
+function toggleHojas() {
+  persUsaHojas = !persUsaHojas;
+  document.getElementById('toggle-hojas').textContent = `📄 Usa hojas: ${persUsaHojas ? 'Sí' : 'No'}`;
+}
 function calcTotalPers() {
   const p = parseFloat(document.getElementById('pers-precio').value) || 0;
   const q = parseInt(document.getElementById('pers-cant').value)     || 0;
-  document.getElementById('pers-total').textContent = 'S/' + (p * q).toFixed(2);
+  document.getElementById('pers-total').textContent = 'S/' + (p*q).toFixed(2);
 }
-
-function setPersQ(n) {
-  document.getElementById('pers-cant').value = n;
-  calcTotalPers();
+function syncTotalDirecto() {
+  const t = parseFloat(document.getElementById('pers-total-directo').value) || 0;
+  document.getElementById('pers-total').textContent = 'S/' + t.toFixed(2);
 }
+function setPersQ(n) { document.getElementById('pers-cant').value = n; calcTotalPers(); }
 
-// Búsqueda de cliente en modal personalizada
 let persBuscarTimeout = null;
 function buscarClientePers(q) {
   clearTimeout(persBuscarTimeout);
-  if (q.length < 2) { document.getElementById('pers-cli-results').style.display='none'; return; }
+  if (q.length < 2) { document.getElementById('pers-cli-results').style.display = 'none'; return; }
   persBuscarTimeout = setTimeout(async () => {
-    const r = await fetch(`/crm/buscar?q=${encodeURIComponent(q)}`);
+    const r    = await fetch(`/crm/buscar?q=${encodeURIComponent(q)}`);
     const data = await r.json();
     const box  = document.getElementById('pers-cli-results');
     box.innerHTML = data.length
-      ? data.map(c =>
-          `<div class="cliente-result-item" onclick="selClientePers(${c.id},'${c.nombre.replace(/'/g,"\'")}',${c.puntos})">
-             <strong>${c.nombre}</strong>
-             ${c.celular ? `<span class="text-muted"> · ${c.celular}</span>` : ''}
-             <span class="badge badge-blue">${c.puntos} pts</span>
-           </div>`).join('')
+      ? data.map(c => `<div class="cliente-result-item" onclick="selClientePers(${c.id},'${c.nombre.replace(/'/g,"\\'")}',${c.puntos})">
+          <strong>${c.nombre}</strong>${c.celular?` · ${c.celular}`:''}
+          <span class="badge badge-blue">${c.puntos} pts</span></div>`).join('')
       : `<div class="cliente-result-item text-muted">No encontrado</div>`;
     box.style.display = 'block';
   }, 300);
 }
-
 function selClientePers(id, nombre, puntos) {
   persClienteId = id;
   document.getElementById('pers-sel-nombre').textContent = nombre;
-  document.getElementById('pers-sel-puntos').textContent = ` · ${puntos} puntos`;
+  document.getElementById('pers-sel-puntos').textContent = ` · ${puntos} pts`;
   document.getElementById('pers-cli-no-sel').style.display = 'none';
   document.getElementById('pers-cli-sel').style.display    = 'block';
   document.getElementById('pers-cli-results').style.display= 'none';
 }
-
 function limpiarClientePers() {
   persClienteId = null;
   document.getElementById('pers-cli-no-sel').style.display = 'block';
@@ -642,41 +647,30 @@ function limpiarClientePers() {
   document.getElementById('pers-cli-results').style.display= 'none';
 }
 
-// Nuevo cliente desde modal personalizada
-function mostrarNuevoCliPers() {
-  // Reutiliza el mismo modal de nuevo cliente
-  document.getElementById('nc-nombre').value  = '';
-  document.getElementById('nc-celular').value = '';
-  // Al guardar, selecciona en personalizada
-  window._nuevoCliTarget = 'pers';
-  document.getElementById('modal-nuevo-cli').classList.add('open');
-}
-
 async function registrarPersonalizada() {
   const desc = document.getElementById('pers-desc').value.trim();
   if (!desc) { showFlash('Describe el servicio o producto', 'error'); return; }
-
   let precio, cant;
   if (persModoDirec) {
     const total = parseFloat(document.getElementById('pers-total-directo').value);
-    cant        = parseInt(document.getElementById('pers-cant-directo').value) || 1;
-    if (isNaN(total) || total < 0) { showFlash('Ingresa el total a cobrar', 'error'); return; }
+    cant = parseInt(document.getElementById('pers-cant-directo').value) || 1;
+    if (isNaN(total) || total < 0) { showFlash('Ingresa el total', 'error'); return; }
     precio = total / cant;
   } else {
     precio = parseFloat(document.getElementById('pers-precio').value);
     cant   = parseInt(document.getElementById('pers-cant').value);
-    if (isNaN(precio) || precio < 0) { showFlash('Ingresa un precio válido', 'error'); return; }
-    if (!cant || cant < 1)           { showFlash('Ingresa una cantidad válida', 'error'); return; }
+    if (isNaN(precio) || precio < 0) { showFlash('Precio inválido', 'error'); return; }
+    if (!cant || cant < 1)           { showFlash('Cantidad inválida', 'error'); return; }
   }
-
   const btn = document.getElementById('btn-pers');
   btn.disabled = true; btn.textContent = 'Registrando…';
-
   const fd = new FormData();
   fd.append('descripcion', desc);
   fd.append('precio',      precio);
   fd.append('cantidad',    cant);
   fd.append('usa_hojas',   persUsaHojas ? 'true' : 'false');
+  const nota = document.getElementById('pers-nota').value.trim();
+  if (nota) fd.append('nota', nota);
   if (persClienteId) fd.append('cliente_id', persClienteId);
 
   try {
@@ -685,22 +679,48 @@ async function registrarPersonalizada() {
     if (data.success) {
       const total = parseFloat(data.total);
       const barVal = document.querySelector('.turno-bar .val');
-      const actual = parseFloat(barVal.textContent.replace('S/','')) + total;
-      barVal.textContent = 'S/' + actual.toFixed(2);
-
+      barVal.textContent = 'S/' + (parseFloat(barVal.textContent.replace('S/','')) + total).toFixed(2);
       agregarUltimaVenta(data.servicio, data.cantidad, total);
-
-      let msg = `✓ ${data.servicio} x${data.cantidad} = S/${total.toFixed(2)}`;
-      if (data.puntos_ganados > 0) msg += ` | +${data.puntos_ganados} pts al cliente`;
-      showFlash(msg, 'success');
+      showFlash(`✓ ${data.servicio} x${data.cantidad} = S/${total.toFixed(2)}`, 'success');
       cerrarPersonalizada();
-    } else {
-      showFlash(data.error || 'Error al registrar', 'error');
-    }
-  } catch(e) {
-    showFlash('Error de conexión', 'error');
-  }
+    } else { showFlash(data.error || 'Error', 'error'); }
+  } catch(e) { showFlash('Error de conexión', 'error'); }
   btn.disabled = false; btn.textContent = '✓ Registrar venta';
 }
+
+// ── Nuevo cliente ─────────────────────────────────────────────
+function mostrarNuevoCliente(target) {
+  _nuevoCliTarget = target;
+  document.getElementById('nc-nombre').value  = '';
+  document.getElementById('nc-celular').value = '';
+  document.getElementById('modal-nuevo-cli').classList.add('open');
+}
+function cerrarNuevoCli() { document.getElementById('modal-nuevo-cli').classList.remove('open'); }
+
+async function guardarNuevoCliente() {
+  const nombre  = document.getElementById('nc-nombre').value.trim();
+  const celular = document.getElementById('nc-celular').value.trim();
+  if (!nombre) { showFlash('El nombre es requerido', 'error'); return; }
+  const fd = new FormData();
+  fd.append('nombre', nombre); fd.append('celular', celular);
+  const r    = await fetch('/crm/cliente/nuevo', { method:'POST', body:fd });
+  const data = await r.json();
+  if (data.id) {
+    showFlash(`✓ Cliente "${data.nombre}" registrado`, 'success');
+    cerrarNuevoCli();
+    if (_nuevoCliTarget === 'pers') selClientePers(data.id, data.nombre, 0);
+    else seleccionarCliente(data.id, data.nombre, 0);
+    _nuevoCliTarget = null;
+    document.getElementById('nc-nombre').value = '';
+    document.getElementById('nc-celular').value = '';
+  } else { showFlash(data.error || 'Error', 'error'); }
+}
+
+// ── Cerrar modales al hacer clic fuera ────────────────────────
+['modal','modal-pers','modal-nuevo-cli'].forEach(id => {
+  document.getElementById(id).addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
+});
 </script>
 {% endblock %}
