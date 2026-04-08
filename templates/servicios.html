@@ -3,29 +3,40 @@
 
 {% block head %}
 <style>
-  .srv-row { display:flex; gap:10px; align-items:center; padding:14px 0;
-             border-bottom:1px solid var(--border); flex-wrap:wrap; }
-  .srv-row:last-child { border:none; }
-  .srv-info { flex:1; min-width:150px; }
-  .srv-info .name { font-weight:700; font-size:15px; }
-  .srv-info .cost { font-size:12px; color:var(--muted); }
-  .srv-actions { display:flex; gap:8px; align-items:center; flex-shrink:0; }
-  .price-field { width:90px; font-weight:700; text-align:center; }
-  .toggle-btn { padding:6px 12px; border-radius:8px; border:2px solid; cursor:pointer;
-                font-size:13px; font-weight:600; transition:all .2s; }
-  .toggle-on  { border-color:var(--green); color:var(--green); background:#F0FFF8; }
-  .toggle-on:hover  { background:var(--green); color:#fff; }
-  .toggle-off { border-color:#9CA3AF; color:#9CA3AF; background:#F9FAFB; }
-  .toggle-off:hover { background:#6B7280; color:#fff; border-color:#6B7280; }
-  .save-btn { padding:6px 12px; border-radius:8px; border:none; cursor:pointer;
-              background:var(--blue); color:#fff; font-size:13px; font-weight:600; }
-  .del-btn  { padding:6px 10px; border-radius:8px; border:2px solid #FCA5A5; cursor:pointer;
-              background:#FEE2E2; color:#991B1B; font-size:13px; font-weight:600; }
-  .margen { font-size:12px; font-weight:700; padding:3px 8px; border-radius:20px; }
-  .margen-good { background:#D1FAE5; color:#065F46; }
-  .margen-warn { background:#FFFBEB; color:#92400E; }
-  .nuevo-badge { background:#D1FAE5; color:#065F46; font-size:10px; font-weight:700;
-                 padding:2px 7px; border-radius:20px; margin-left:6px; }
+  .srv-row { padding: 14px 0; border-bottom: 1px solid var(--border); }
+  .srv-row:last-child { border: none; }
+  .srv-header { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .srv-info { flex: 1; min-width: 150px; }
+  .srv-info .name { font-weight: 700; font-size: 15px; }
+  .srv-info .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .srv-actions { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; flex-shrink: 0; }
+  .price-field { width: 85px; font-weight: 700; text-align: center; }
+  .toggle-btn { padding: 6px 11px; border-radius: 8px; border: 2px solid; cursor: pointer;
+                font-size: 12px; font-weight: 600; transition: all .2s; }
+  .toggle-on  { border-color: var(--green); color: var(--green); background: #F0FFF8; }
+  .toggle-on:hover  { background: var(--green); color: #fff; }
+  .toggle-off { border-color: #9CA3AF; color: #9CA3AF; background: #F9FAFB; }
+  .toggle-off:hover { background: #6B7280; color: #fff; border-color: #6B7280; }
+  .save-btn { padding: 6px 11px; border-radius: 8px; border: none; cursor: pointer;
+              background: var(--blue); color: #fff; font-size: 13px; font-weight: 600; }
+  .del-btn  { padding: 6px 9px; border-radius: 8px; border: 2px solid #FCA5A5; cursor: pointer;
+              background: #FEE2E2; color: #991B1B; font-size: 13px; font-weight: 600; }
+  .disc-toggle { padding: 5px 10px; border-radius: 8px; border: 2px solid; cursor: pointer;
+                 font-size: 11px; font-weight: 700; }
+  .disc-on  { border-color: var(--warn); color: var(--warn); background: #FFFBEB; }
+  .disc-off { border-color: #D1D5DB; color: #9CA3AF; background: #F9FAFB; }
+
+  /* Niveles */
+  .niveles-section { margin-top: 10px; padding: 10px 14px; background: #F8FAFF;
+                     border-radius: 10px; border: 1px solid var(--border); }
+  .nivel-row { display: flex; gap: 8px; align-items: center; margin-bottom: 7px; flex-wrap: wrap; }
+  .nivel-row:last-child { margin-bottom: 0; }
+  .nivel-nombre-input { flex: 1; min-width: 120px; font-size: 13px; padding: 6px 10px; }
+  .nivel-precio-input { width: 85px; font-size: 13px; padding: 6px 10px; text-align: center; font-weight: 700; }
+
+  .margen { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
+  .margen-good { background: #D1FAE5; color: #065F46; }
+  .margen-warn { background: #FFFBEB; color: #92400E; }
 </style>
 {% endblock %}
 
@@ -37,55 +48,92 @@
   </button>
 </div>
 <p class="text-muted" style="margin-bottom:16px;font-size:13px">
-  Edita precios, activa/desactiva servicios, o agrega nuevos (stickers, micas, recargas, etc.)
+  Edita precios, niveles por tipo de contenido, descuento por volumen y activa/desactiva servicios.
 </p>
 
 <div class="card" id="lista-servicios">
   {% for s in servicios %}
   {% set margen = ((s.precio - s.costo_real) / s.precio * 100) if s.precio > 0 else 0 %}
   <div class="srv-row" id="row-{{ s.id }}">
-    <div class="srv-info">
-      <div class="name">
-        {% if not s.activo %}<span style="opacity:.45">🚫</span>{% endif %}
-        {{ s.nombre }}
+    <!-- Cabecera del servicio -->
+    <div class="srv-header">
+      <div class="srv-info">
+        <div class="name">
+          {% if not s.activo %}<span style="opacity:.4">🚫</span>{% endif %}
+          {{ s.nombre }}
+        </div>
+        <div class="meta">
+          Precio base: S/{{ "%.2f"|format(s.precio) }} · Costo: S/{{ "%.3f"|format(s.costo_real) }}
+          <span class="margen {% if margen > 60 %}margen-good{% else %}margen-warn{% endif %}">
+            {{ "%.0f"|format(margen) }}% margen
+          </span>
+        </div>
       </div>
-      <div class="cost">
-        Costo: S/{{ "%.3f"|format(s.costo_real) }}
-        <span class="margen {% if margen > 60 %}margen-good{% else %}margen-warn{% endif %}">
-          {{ "%.0f"|format(margen) }}% margen
-        </span>
+      <div class="srv-actions">
+        <div>
+          <div style="font-size:10px;color:var(--muted);text-align:center">Precio base</div>
+          <input type="number" class="price-field" id="precio-{{ s.id }}"
+                 value="{{ "%.2f"|format(s.precio) }}" step="0.01" min="0">
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);text-align:center">Costo</div>
+          <input type="number" class="price-field" id="costo-{{ s.id }}"
+                 value="{{ "%.3f"|format(s.costo_real) }}" step="0.001" min="0">
+        </div>
+        <button class="save-btn" onclick="guardar({{ s.id }})">💾</button>
+        <button class="toggle-btn {{ 'toggle-on' if s.activo else 'toggle-off' }}"
+                id="toggle-{{ s.id }}" onclick="toggleSrv({{ s.id }})">
+          {{ '✓ Activo' if s.activo else '✗ Inactivo' }}
+        </button>
+        <button class="disc-toggle {{ 'disc-on' if s.descuento_volumen else 'disc-off' }}"
+                id="disc-{{ s.id }}" onclick="toggleDescuento({{ s.id }})"
+                title="Descuento 8% al comprar 10+ unidades">
+          🏷 {{ '-8%' if s.descuento_volumen else 'Sin desc.' }}
+        </button>
+        <button class="del-btn" onclick="eliminarSrv({{ s.id }}, '{{ s.nombre|e }}')">🗑</button>
       </div>
     </div>
-    <div class="srv-actions">
-      <div>
-        <label style="font-size:11px;color:var(--muted);display:block;text-align:center">Precio</label>
-        <input type="number" class="price-field" id="precio-{{ s.id }}"
-               value="{{ "%.2f"|format(s.precio) }}" step="0.01" min="0">
+
+    <!-- Niveles de precio -->
+    <div class="niveles-section" id="niveles-{{ s.id }}">
+      <div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:8px">
+        📊 Niveles de precio
+        <span style="font-weight:400;color:var(--muted)">(el cliente elige al momento de la venta)</span>
       </div>
-      <div>
-        <label style="font-size:11px;color:var(--muted);display:block;text-align:center">Costo</label>
-        <input type="number" class="price-field" id="costo-{{ s.id }}"
-               value="{{ "%.3f"|format(s.costo_real) }}" step="0.001" min="0">
+      {% if s.niveles %}
+        {% for n in s.niveles %}
+        <div class="nivel-row" id="nivel-row-{{ n.id }}">
+          <input type="text" class="nivel-nombre-input" id="nnom-{{ n.id }}"
+                 value="{{ n.nombre }}" placeholder="Nombre del nivel">
+          <input type="number" class="nivel-precio-input" id="nprec-{{ n.id }}"
+                 value="{{ "%.2f"|format(n.precio) }}" step="0.01" min="0"
+                 placeholder="S/">
+          <button class="save-btn btn-sm" onclick="guardarNivel({{ n.id }})">💾</button>
+          <button class="del-btn btn-sm" onclick="eliminarNivel({{ n.id }})">🗑</button>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Sin niveles — se usa el precio base.</p>
+      {% endif %}
+      <!-- Agregar nivel -->
+      <div class="nivel-row" id="add-nivel-{{ s.id }}" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:8px">
+        <input type="text" class="nivel-nombre-input" id="new-nnom-{{ s.id }}" placeholder="Nombre del nuevo nivel">
+        <input type="number" class="nivel-precio-input" id="new-nprec-{{ s.id }}" placeholder="S/" step="0.01" min="0">
+        <button class="btn btn-success btn-sm" onclick="agregarNivel({{ s.id }})">+ Agregar</button>
       </div>
-      <button class="save-btn" onclick="guardar({{ s.id }})">💾</button>
-      <button class="toggle-btn {{ 'toggle-on' if s.activo else 'toggle-off' }}"
-              id="toggle-{{ s.id }}" onclick="toggleSrv({{ s.id }})">
-        {{ '✓ Activo' if s.activo else '✗ Inactivo' }}
-      </button>
-      <button class="del-btn" onclick="eliminarSrv({{ s.id }}, '{{ s.nombre|e }}')">🗑</button>
     </div>
   </div>
   {% endfor %}
 </div>
 
-<div class="alert alert-warn">
-  💡 Si un servicio tiene ventas registradas y lo eliminas, se desactivará en vez de borrarse
-  para no perder el historial. Si no tiene ventas, se elimina por completo.
+<div class="alert alert-warn" style="margin-top:12px">
+  💡 <strong>Precio base:</strong> se usa si no hay niveles o si el cliente elige precio manual.
+  <strong>Descuento -8%:</strong> aplica automáticamente cuando compran 10+ unidades (ideal para copias e impresiones).
 </div>
 
-<!-- Modal nuevo servicio -->
+<!-- ── MODAL NUEVO SERVICIO ── -->
 <div class="modal-overlay" id="modal-nuevo">
-  <div class="modal-box">
+  <div class="modal-box" style="max-height:90vh;overflow-y:auto">
     <div class="modal-title">
       Agregar nuevo servicio
       <button class="modal-close" onclick="cerrarModal()">✕</button>
@@ -93,149 +141,195 @@
 
     <div class="form-group">
       <label>Nombre del servicio *</label>
-      <input type="text" id="ns-nombre"
-             placeholder="Ej: Sticker personalizado, Mica A4, Recarga Bitel…">
+      <input type="text" id="ns-nombre" placeholder="Ej: Sticker personalizado, Recarga Bitel…">
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group">
-        <label>Precio de venta (S/) *</label>
-        <input type="number" id="ns-precio" placeholder="Ej: 1.50" step="0.01" min="0">
+        <label>Precio base (S/) *</label>
+        <input type="number" id="ns-precio" placeholder="0.00" step="0.01" min="0"
+               oninput="previewMargen()">
       </div>
       <div class="form-group">
         <label>Costo real (S/) <span style="font-weight:400;color:var(--muted)">(opcional)</span></label>
-        <input type="number" id="ns-costo" placeholder="Dejar en 0 si no sabes" step="0.01" min="0" value="0">
-        <div style="font-size:11px;color:var(--muted);margin-top:3px">
-          Sin costo real el margen no se calculará
-        </div>
+        <input type="number" id="ns-costo" placeholder="0.00" step="0.01" min="0" value="0"
+               oninput="previewMargen()">
       </div>
     </div>
 
-    <div id="ns-margen-preview" style="display:none" class="alert alert-success">
+    <div id="ns-margen-preview" style="display:none" class="alert alert-success" style="margin-bottom:10px">
       📊 Margen estimado: <strong id="ns-margen-val">—</strong>
     </div>
 
-    <button class="btn btn-success btn-full" onclick="crearServicio()">✓ Agregar servicio</button>
+    <!-- Opciones extra -->
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px">
+        <input type="checkbox" id="ns-descuento-vol" style="width:18px;height:18px">
+        🏷 Aplica descuento por volumen (-8% en 10+ uds)
+      </label>
+    </div>
+
+    <!-- Niveles iniciales -->
+    <div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:8px">
+      📊 Niveles de precio (opcional)
+    </div>
+    <div id="ns-niveles-list"></div>
+    <button type="button" class="btn btn-outline btn-sm" onclick="agregarNivelNuevo()">
+      + Agregar nivel
+    </button>
+
+    <hr style="margin:14px 0">
+    <button class="btn btn-success btn-full" onclick="crearServicio()">✓ Crear servicio</button>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function cerrarModal() {
-  document.getElementById('modal-nuevo').classList.remove('open');
-}
+function cerrarModal() { document.getElementById('modal-nuevo').classList.remove('open'); }
 
-// Preview del margen al escribir precio/costo
-['ns-precio','ns-costo'].forEach(id =>
-  document.getElementById(id).addEventListener('input', previewMargen)
-);
-
+// ── Preview margen ────────────────────────────────────────────
 function previewMargen() {
   const p = parseFloat(document.getElementById('ns-precio').value) || 0;
   const c = parseFloat(document.getElementById('ns-costo').value)  || 0;
   const box = document.getElementById('ns-margen-preview');
   if (p > 0) {
-    const m = ((p - c) / p * 100).toFixed(1);
+    const m = ((p-c)/p*100).toFixed(1);
     document.getElementById('ns-margen-val').textContent = m + '%';
     box.style.display = 'block';
     box.className = 'alert ' + (parseFloat(m) > 40 ? 'alert-success' : 'alert-warn');
-  } else {
-    box.style.display = 'none';
-  }
+  } else { box.style.display = 'none'; }
 }
 
+// ── Niveles en modal nuevo ────────────────────────────────────
+let nsNivelCount = 0;
+function agregarNivelNuevo() {
+  nsNivelCount++;
+  const div = document.createElement('div');
+  div.className = 'nivel-row';
+  div.id = 'ns-niv-' + nsNivelCount;
+  div.innerHTML = `
+    <input type="text" class="nivel-nombre-input ns-nnom" placeholder="Nombre del nivel (ej: Texto, Simple)">
+    <input type="number" class="nivel-precio-input ns-nprec" placeholder="S/" step="0.01" min="0">
+    <button type="button" class="del-btn btn-sm" onclick="document.getElementById('ns-niv-${nsNivelCount}').remove()">🗑</button>`;
+  document.getElementById('ns-niveles-list').appendChild(div);
+}
+
+// ── Crear servicio ────────────────────────────────────────────
 async function crearServicio() {
   const nombre = document.getElementById('ns-nombre').value.trim();
   const precio = document.getElementById('ns-precio').value;
-  const costo  = document.getElementById('ns-costo').value  || '0';
+  const costo  = document.getElementById('ns-costo').value || '0';
+  const descVol= document.getElementById('ns-descuento-vol').checked;
 
   if (!nombre) { showFlash('El nombre es requerido', 'error'); return; }
-  if (!precio || parseFloat(precio) < 0) { showFlash('Ingresa un precio válido', 'error'); return; }
+  if (!precio || parseFloat(precio) < 0) { showFlash('Precio inválido', 'error'); return; }
+
+  // Recoger niveles
+  const niveles = [];
+  document.querySelectorAll('#ns-niveles-list .nivel-row').forEach(row => {
+    const nom  = row.querySelector('.ns-nnom')?.value.trim();
+    const prec = row.querySelector('.ns-nprec')?.value;
+    if (nom && prec) niveles.push({ nombre: nom, precio: parseFloat(prec) });
+  });
 
   const fd = new FormData();
-  fd.append('nombre',     nombre);
-  fd.append('precio',     precio);
-  fd.append('costo_real', costo);
+  fd.append('nombre',             nombre);
+  fd.append('precio',             precio);
+  fd.append('costo_real',         costo);
+  fd.append('descuento_volumen',  descVol ? 'true' : 'false');
+  fd.append('niveles',            JSON.stringify(niveles));
 
-  const r    = await fetch('/servicios/nuevo', { method: 'POST', body: fd });
+  const r    = await fetch('/servicios/nuevo', { method:'POST', body:fd });
   const data = await r.json();
-
   if (data.id) {
-    showFlash(`✓ Servicio "${data.nombre}" agregado`, 'success');
+    showFlash(`✓ Servicio "${data.nombre}" creado`, 'success');
     cerrarModal();
-    // Agregar fila sin recargar
-    const lista = document.getElementById('lista-servicios');
-    const div   = document.createElement('div');
-    div.className  = 'srv-row';
-    div.id         = 'row-' + data.id;
-    div.innerHTML  = `
-      <div class="srv-info">
-        <div class="name">${data.nombre} <span class="nuevo-badge">NUEVO</span></div>
-        <div class="cost">Costo: S/${parseFloat(data.costo_real).toFixed(3)}
-          <span class="margen ${data.margen > 60 ? 'margen-good' : 'margen-warn'}">${data.margen}% margen</span>
-        </div>
-      </div>
-      <div class="srv-actions">
-        <div><label style="font-size:11px;color:var(--muted);display:block;text-align:center">Precio</label>
-          <input type="number" class="price-field" id="precio-${data.id}" value="${parseFloat(data.precio).toFixed(2)}" step="0.01" min="0">
-        </div>
-        <div><label style="font-size:11px;color:var(--muted);display:block;text-align:center">Costo</label>
-          <input type="number" class="price-field" id="costo-${data.id}" value="${parseFloat(data.costo_real).toFixed(3)}" step="0.001" min="0">
-        </div>
-        <button class="save-btn" onclick="guardar(${data.id})">💾</button>
-        <button class="toggle-btn toggle-on" id="toggle-${data.id}" onclick="toggleSrv(${data.id})">✓ Activo</button>
-        <button class="del-btn" onclick="eliminarSrv(${data.id}, '${data.nombre.replace(/'/g,"\\'")}')">🗑</button>
-      </div>`;
-    lista.appendChild(div);
-    document.getElementById('ns-nombre').value = '';
-    document.getElementById('ns-precio').value = '';
-    document.getElementById('ns-costo').value  = '0';
-    document.getElementById('ns-margen-preview').style.display = 'none';
-  } else {
-    showFlash(data.error || 'Error al crear servicio', 'error');
-  }
+    setTimeout(() => location.reload(), 1000);
+  } else { showFlash(data.error || 'Error', 'error'); }
 }
 
+// ── Editar servicio (precio base y costo) ─────────────────────
 async function guardar(id) {
   const precio = document.getElementById('precio-'+id).value;
   const costo  = document.getElementById('costo-'+id).value;
   const fd = new FormData();
-  fd.append('precio',     precio);
-  fd.append('costo_real', costo);
+  fd.append('precio', precio); fd.append('costo_real', costo);
   const r    = await fetch(`/servicios/editar/${id}`, { method:'POST', body:fd });
   const data = await r.json();
   if (data.success) showFlash('✓ Precio actualizado', 'success');
-  else showFlash('Error al guardar', 'error');
+  else showFlash('Error', 'error');
 }
 
 async function toggleSrv(id) {
   const r    = await fetch(`/servicios/toggle/${id}`, { method:'POST' });
   const data = await r.json();
   const btn  = document.getElementById('toggle-'+id);
-  if (data.activo) {
-    btn.className   = 'toggle-btn toggle-on';
-    btn.textContent = '✓ Activo';
-    showFlash('Servicio activado', 'success');
-  } else {
-    btn.className   = 'toggle-btn toggle-off';
-    btn.textContent = '✗ Inactivo';
-    showFlash('Servicio desactivado', 'success');
-  }
+  if (data.activo) { btn.className='toggle-btn toggle-on'; btn.textContent='✓ Activo'; showFlash('Activado','success'); }
+  else             { btn.className='toggle-btn toggle-off'; btn.textContent='✗ Inactivo'; showFlash('Desactivado','success'); }
+}
+
+async function toggleDescuento(id) {
+  const r    = await fetch(`/servicios/toggle_descuento/${id}`, { method:'POST' });
+  const data = await r.json();
+  const btn  = document.getElementById('disc-'+id);
+  if (data.descuento_volumen) { btn.className='disc-toggle disc-on'; btn.textContent='🏷 -8%'; showFlash('Descuento activado','success'); }
+  else                        { btn.className='disc-toggle disc-off'; btn.textContent='Sin desc.'; showFlash('Descuento desactivado','success'); }
 }
 
 async function eliminarSrv(id, nombre) {
-  if (!confirm(`¿Eliminar el servicio "${nombre}"?\n\nSi tiene ventas registradas se desactivará, si no las tiene se eliminará.`)) return;
+  if (!confirm(`¿Eliminar "${nombre}"?\n\nSi tiene ventas, se desactivará.`)) return;
   const r    = await fetch(`/servicios/eliminar/${id}`, { method:'POST' });
   const data = await r.json();
-  if (data.error) { showFlash(data.error, 'error'); return; }
-  if (data.accion === 'eliminado') {
-    document.getElementById('row-'+id).remove();
-    showFlash(`"${data.nombre}" eliminado`, 'success');
-  } else {
-    showFlash(`"${data.nombre}" desactivado (tiene ventas)`, 'success');
-    const btn = document.getElementById('toggle-'+id);
-    if (btn) { btn.className = 'toggle-btn toggle-off'; btn.textContent = '✗ Inactivo'; }
-  }
+  if (data.error) { showFlash(data.error,'error'); return; }
+  if (data.accion === 'eliminado') { document.getElementById('row-'+id).remove(); showFlash(`"${data.nombre}" eliminado`,'success'); }
+  else showFlash(`"${data.nombre}" desactivado (tiene ventas)`,'success');
+}
+
+// ── Gestión de niveles ────────────────────────────────────────
+async function guardarNivel(nivelId) {
+  const nombre = document.getElementById('nnom-'+nivelId).value.trim();
+  const precio = document.getElementById('nprec-'+nivelId).value;
+  if (!nombre || !precio) { showFlash('Nombre y precio requeridos', 'error'); return; }
+  const fd = new FormData();
+  fd.append('nombre', nombre); fd.append('precio', precio);
+  const r    = await fetch(`/servicios/niveles/editar/${nivelId}`, { method:'POST', body:fd });
+  const data = await r.json();
+  if (data.success) showFlash('✓ Nivel actualizado', 'success');
+  else showFlash('Error', 'error');
+}
+
+async function eliminarNivel(nivelId) {
+  if (!confirm('¿Eliminar este nivel?')) return;
+  const r    = await fetch(`/servicios/niveles/eliminar/${nivelId}`, { method:'POST' });
+  const data = await r.json();
+  if (data.success) { document.getElementById('nivel-row-'+nivelId)?.remove(); showFlash('Nivel eliminado','success'); }
+}
+
+async function agregarNivel(srvId) {
+  const nombre = document.getElementById('new-nnom-'+srvId).value.trim();
+  const precio = document.getElementById('new-nprec-'+srvId).value;
+  if (!nombre || !precio) { showFlash('Completa nombre y precio del nivel', 'error'); return; }
+  const fd = new FormData();
+  fd.append('servicio_id', srvId); fd.append('nombre', nombre); fd.append('precio', precio);
+  const r    = await fetch('/servicios/niveles/agregar', { method:'POST', body:fd });
+  const data = await r.json();
+  if (data.id) {
+    // Insertar nueva fila antes del div de agregar
+    const addDiv = document.getElementById('add-nivel-'+srvId);
+    const div    = document.createElement('div');
+    div.className= 'nivel-row';
+    div.id       = 'nivel-row-'+data.id;
+    div.innerHTML= `
+      <input type="text" class="nivel-nombre-input" id="nnom-${data.id}" value="${data.nombre}">
+      <input type="number" class="nivel-precio-input" id="nprec-${data.id}" value="${data.precio.toFixed(2)}" step="0.01" min="0">
+      <button class="save-btn btn-sm" onclick="guardarNivel(${data.id})">💾</button>
+      <button class="del-btn btn-sm" onclick="eliminarNivel(${data.id})">🗑</button>`;
+    addDiv.parentNode.insertBefore(div, addDiv);
+    // Limpiar campos
+    document.getElementById('new-nnom-'+srvId).value  = '';
+    document.getElementById('new-nprec-'+srvId).value = '';
+    showFlash(`✓ Nivel "${data.nombre}" agregado`, 'success');
+  } else { showFlash(data.error || 'Error', 'error'); }
 }
 
 document.getElementById('modal-nuevo').addEventListener('click', function(e) {
