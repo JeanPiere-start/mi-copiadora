@@ -46,11 +46,23 @@ class Usuario(db.Model):
 
 class Servicio(db.Model):
     __tablename__ = 'servicios'
-    id         = db.Column(db.Integer, primary_key=True)
-    nombre     = db.Column(db.String(100), nullable=False)
-    precio     = db.Column(db.Float, nullable=False)
-    costo_real = db.Column(db.Float, nullable=False)
-    activo     = db.Column(db.Boolean, default=True)
+    id                  = db.Column(db.Integer, primary_key=True)
+    nombre              = db.Column(db.String(100), nullable=False)
+    precio              = db.Column(db.Float, nullable=False)
+    costo_real          = db.Column(db.Float, nullable=False)
+    activo              = db.Column(db.Boolean, default=True)
+    descuento_volumen   = db.Column(db.Boolean, default=False)  # 8% en copias/impresiones
+
+
+class ServicioNivel(db.Model):
+    __tablename__ = 'servicio_niveles'
+    id          = db.Column(db.Integer, primary_key=True)
+    servicio_id = db.Column(db.Integer, db.ForeignKey('servicios.id'), nullable=False)
+    nombre      = db.Column(db.String(100), nullable=False)
+    precio      = db.Column(db.Float, nullable=False)
+    orden       = db.Column(db.Integer, default=0)
+
+    servicio = db.relationship('Servicio', backref='niveles')
 
 
 class Cliente(db.Model):
@@ -75,7 +87,10 @@ class Venta(db.Model):
     usuario_id     = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     cliente_id     = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=True)
     es_canje       = db.Column(db.Boolean, default=False)
-    descripcion    = db.Column(db.String(200), nullable=True)  # para ventas personalizadas
+    descripcion    = db.Column(db.String(200), nullable=True)
+    nivel_nombre   = db.Column(db.String(100), nullable=True)
+    nota           = db.Column(db.String(200), nullable=True)
+    descuento      = db.Column(db.Float, default=0)
 
     servicio = db.relationship('Servicio', backref='ventas')
     usuario  = db.relationship('Usuario',  backref='ventas')
@@ -152,27 +167,45 @@ def init_db():
             Usuario(nombre='Apoyo', pin=generate_password_hash('0000'), rol='apoyo'),
         ])
 
-    # Servicios
+    # Servicios con niveles de precio
     if not Servicio.query.first():
-        db.session.add_all([
-            Servicio(nombre='Copia B&N texto',       precio=0.10, costo_real=0.023),
-            Servicio(nombre='Copia B&N con imagen',  precio=0.20, costo_real=0.027),
-            Servicio(nombre='Copia a color',          precio=0.30, costo_real=0.034),
-            Servicio(nombre='Impresión B&N',          precio=0.50, costo_real=0.026),
-            Servicio(nombre='Impresión a color',      precio=0.80, costo_real=0.034),
-            Servicio(nombre='Escaneo',                precio=1.00, costo_real=0.010),
-            Servicio(nombre='Foto carné (hoja x6)',   precio=4.00, costo_real=0.034),
-            Servicio(nombre='Llenado de formulario',  precio=2.50, costo_real=0.026),
-        ])
+        servicios_seed = [
+            ('Copia B&N',          0.10, 0.023, True,  [('Texto', 0.10), ('Con imagen', 0.20)]),
+            ('Copia color',        0.30, 0.034, True,  [('Simple', 0.30), ('Densa', 0.50)]),
+            ('Impresión B&N',      0.30, 0.026, True,  [('Texto', 0.30), ('Con imágenes', 0.50)]),
+            ('Impresión color',    0.50, 0.034, True,  [('Normal', 0.50), ('Alta cobertura', 1.00)]),
+            ('Escaneo',            1.00, 0.010, False, [('Página suelta', 1.00), ('Doc. completo ≤5 págs', 2.00)]),
+            ('Foto carné (x6)',    4.00, 0.034, False, []),
+            ('Llenado formulario', 2.50, 0.026, False, []),
+        ]
+        for nombre, precio, costo, desc_vol, niveles in servicios_seed:
+            s = Servicio(nombre=nombre, precio=precio, costo_real=costo,
+                         descuento_volumen=desc_vol)
+            db.session.add(s)
+            db.session.flush()
+            for i, (nnom, nprec) in enumerate(niveles):
+                db.session.add(ServicioNivel(servicio_id=s.id, nombre=nnom,
+                                             precio=nprec, orden=i))
 
-    # Migración: agregar columna descripcion si no existe
+    # Migraciones de columnas nuevas
+    migraciones = [
+        'ALTER TABLE ventas ADD COLUMN descripcion VARCHAR(200)',
+        'ALTER TABLE ventas ADD COLUMN nivel_nombre VARCHAR(100)',
+        'ALTER TABLE ventas ADD COLUMN nota VARCHAR(200)',
+        'ALTER TABLE ventas ADD COLUMN descuento FLOAT DEFAULT 0',
+        'ALTER TABLE servicios ADD COLUMN descuento_volumen BOOLEAN DEFAULT FALSE',
+    ]
     try:
         from sqlalchemy import text
         with db.engine.connect() as conn:
-            conn.execute(text('ALTER TABLE ventas ADD COLUMN descripcion VARCHAR(200)'))
+            for sql in migraciones:
+                try:
+                    conn.execute(text(sql))
+                except Exception:
+                    pass
             conn.commit()
     except Exception:
-        pass  # ya existe
+        pass
 
     # Servicio especial para ventas personalizadas (oculto en botones)
     if not Servicio.query.filter_by(nombre='__personalizado__').first():
@@ -299,17 +332,41 @@ def registrar_venta():
     if not srv or not srv.activo:
         return jsonify({'error': 'Servicio no disponible'}), 400
 
-    # Si precio=0 en el servicio, usar el precio ingresado manualmente
-    precio_manual = request.form.get('precio_manual', type=float)
-    precio_final  = precio_manual if (srv.precio == 0 and precio_manual and precio_manual > 0) else srv.precio
+    nivel_id     = request.form.get('nivel_id', type=int)
+    precio_manual= request.form.get('precio_manual', type=float)
+    nota         = request.form.get('nota', '').strip() or None
+    nivel_nombre = None
 
-    now   = datetime.now()
-    total = round(precio_final * cantidad, 2)
+    # Determinar precio: nivel > manual > servicio base
+    if nivel_id:
+        niv = ServicioNivel.query.get(nivel_id)
+        if niv and niv.servicio_id == servicio_id:
+            precio_final = niv.precio
+            nivel_nombre = niv.nombre
+        else:
+            precio_final = srv.precio
+    elif precio_manual and precio_manual >= 0:
+        precio_final = precio_manual
+    elif srv.precio == 0 and not precio_manual:
+        return jsonify({'error': 'Este servicio requiere un precio manual'}), 400
+    else:
+        precio_final = srv.precio
 
+    # Descuento por volumen: 8% en copias/impresiones con 10+ unidades
+    UMBRAL_DESCUENTO = 10
+    descuento = 0.0
+    if srv.descuento_volumen and cantidad >= UMBRAL_DESCUENTO:
+        descuento = 8.0
+
+    subtotal  = precio_final * cantidad
+    total     = round(subtotal * (1 - descuento / 100), 2)
+
+    now = datetime.now()
     v = Venta(fecha=now.date(), hora=now.time(),
               servicio_id=servicio_id, cantidad=cantidad,
               precio_unitario=precio_final, total=total,
               usuario_id=session['usuario_id'], cliente_id=cliente_id,
+              nivel_nombre=nivel_nombre, nota=nota, descuento=descuento,
               es_canje=False)
     db.session.add(v)
 
@@ -328,13 +385,14 @@ def registrar_venta():
 
     db.session.commit()
     return jsonify({
-        'success':        True,
-        'total':          total,
-        'puntos_ganados': puntos_ganados,
-        'puntos_actuales':puntos_actuales,
-        'servicio':       srv.nombre,
-        'cantidad':       cantidad,
+        'success':         True,
+        'total':           total,
+        'puntos_ganados':  puntos_ganados,
+        'puntos_actuales': puntos_actuales,
+        'servicio':        srv.nombre + (f' ({nivel_nombre})' if nivel_nombre else ''),
+        'cantidad':        cantidad,
         'precio_variable': srv.precio == 0,
+        'descuento':       descuento,
     })
 
 
@@ -645,6 +703,63 @@ def toggle_usuario(id):
     db.session.commit()
     return jsonify({'activo': u.activo, 'nombre': u.nombre})
 
+@app.route('/servicios/niveles/<int:id>')
+@login_required
+def get_niveles(id):
+    niveles = ServicioNivel.query.filter_by(servicio_id=id).order_by(ServicioNivel.orden).all()
+    srv     = Servicio.query.get_or_404(id)
+    return jsonify({
+        'niveles':          [{'id': n.id, 'nombre': n.nombre, 'precio': n.precio} for n in niveles],
+        'precio_base':      srv.precio,
+        'descuento_vol':    srv.descuento_volumen,
+    })
+
+
+@app.route('/servicios/niveles/agregar', methods=['POST'])
+@admin_required
+def agregar_nivel():
+    servicio_id = request.form.get('servicio_id', type=int)
+    nombre      = request.form.get('nombre', '').strip()
+    precio      = request.form.get('precio', type=float)
+    if not servicio_id or not nombre or precio is None:
+        return jsonify({'error': 'Datos incompletos'}), 400
+    orden = ServicioNivel.query.filter_by(servicio_id=servicio_id).count()
+    n = ServicioNivel(servicio_id=servicio_id, nombre=nombre, precio=precio, orden=orden)
+    db.session.add(n)
+    db.session.commit()
+    return jsonify({'id': n.id, 'nombre': n.nombre, 'precio': n.precio})
+
+
+@app.route('/servicios/niveles/editar/<int:nivel_id>', methods=['POST'])
+@admin_required
+def editar_nivel(nivel_id):
+    n      = ServicioNivel.query.get_or_404(nivel_id)
+    nombre = request.form.get('nombre', '').strip()
+    precio = request.form.get('precio', type=float)
+    if nombre: n.nombre = nombre
+    if precio is not None: n.precio = precio
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@app.route('/servicios/niveles/eliminar/<int:nivel_id>', methods=['POST'])
+@admin_required
+def eliminar_nivel(nivel_id):
+    n = ServicioNivel.query.get_or_404(nivel_id)
+    db.session.delete(n)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@app.route('/servicios/toggle_descuento/<int:id>', methods=['POST'])
+@admin_required
+def toggle_descuento(id):
+    s = Servicio.query.get_or_404(id)
+    s.descuento_volumen = not s.descuento_volumen
+    db.session.commit()
+    return jsonify({'descuento_volumen': s.descuento_volumen})
+
+
 @app.route('/servicios/nuevo', methods=['POST'])
 @admin_required
 def nuevo_servicio():
@@ -660,12 +775,28 @@ def nuevo_servicio():
     if costo_real is None or costo_real < 0:
         costo_real = 0.0  # opcional: sin costo = margen desconocido
 
-    s = Servicio(nombre=nombre, precio=precio, costo_real=costo_real, activo=True)
+    desc_vol = request.form.get('descuento_volumen', 'false') == 'true'
+    s = Servicio(nombre=nombre, precio=precio, costo_real=costo_real,
+                 activo=True, descuento_volumen=desc_vol)
     db.session.add(s)
+    db.session.flush()
+    # Niveles iniciales enviados como JSON
+    import json as _json
+    niveles_json = request.form.get('niveles', '[]')
+    try:
+        niveles_data = _json.loads(niveles_json)
+        for i, niv in enumerate(niveles_data):
+            if niv.get('nombre') and niv.get('precio') is not None:
+                db.session.add(ServicioNivel(
+                    servicio_id=s.id, nombre=niv['nombre'],
+                    precio=float(niv['precio']), orden=i))
+    except Exception:
+        pass
     db.session.commit()
     margen = ((precio - costo_real) / precio * 100) if precio > 0 else 0
     return jsonify({'id': s.id, 'nombre': s.nombre, 'precio': s.precio,
-                    'costo_real': s.costo_real, 'margen': round(margen, 1)})
+                    'costo_real': s.costo_real, 'margen': round(margen, 1),
+                    'descuento_volumen': s.descuento_volumen})
 
 
 @app.route('/servicios/eliminar/<int:id>', methods=['POST'])
