@@ -7,7 +7,6 @@
   <style>
     :root {
       --blue:    #185FA5;
-      --blue2:   #1249830;
       --green:   #1D9E75;
       --bg:      #F4F6FA;
       --card:    #FFFFFF;
@@ -23,26 +22,17 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif;
                  background: var(--bg); color: var(--text); font-size: 15px; }
-
-    /* ── TOP BAR ── */
-    .topbar {
-      position: sticky; top: 0; z-index: 100;
-      background: var(--blue);
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 16px; height: 56px;
-      box-shadow: 0 2px 8px rgba(0,0,0,.2);
-    }
+    .topbar { position: sticky; top: 0; z-index: 100; background: var(--blue);
+              display: flex; align-items: center; justify-content: space-between;
+              padding: 0 16px; height: 56px; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
     .topbar-brand { color: #fff; font-size: 18px; font-weight: 700;
                     display: flex; align-items: center; gap: 8px; }
-    .topbar-brand span { font-size: 22px; }
     .topbar-right { display: flex; align-items: center; gap: 10px; }
     .topbar-user { color: rgba(255,255,255,.85); font-size: 13px; }
-    .btn-logout { background: rgba(255,255,255,.18); border: none;
-                  color: #fff; padding: 6px 12px; border-radius: 8px;
-                  cursor: pointer; font-size: 13px; text-decoration: none; }
+    .btn-logout { background: rgba(255,255,255,.18); border: none; color: #fff;
+                  padding: 6px 12px; border-radius: 8px; cursor: pointer;
+                  font-size: 13px; text-decoration: none; }
     .btn-logout:hover { background: rgba(255,255,255,.28); }
-
-    /* ── NAV TABS ── */
     .navtabs { background: var(--card); border-bottom: 1px solid var(--border);
                display: flex; overflow-x: auto; gap: 4px; padding: 0 12px;
                scrollbar-width: none; }
@@ -54,44 +44,31 @@
     .navtab:hover { color: var(--blue); }
     .navtab.active { color: var(--blue); border-bottom-color: var(--blue); }
     .navtab .ico { font-size: 16px; }
-
-    /* ── LAYOUT ── */
     .page { max-width: 900px; margin: 0 auto; padding: 20px 14px 32px; }
-
-    /* ── CARDS ── */
     .card { background: var(--card); border-radius: var(--radius);
             box-shadow: var(--shadow); padding: 20px; margin-bottom: 16px; }
     .card-title { font-size: 15px; font-weight: 700; color: var(--blue);
                   margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
-
-    /* ── BOTONES ── */
-    .btn { display: inline-flex; align-items: center; gap: 6px;
-           padding: 10px 18px; border-radius: 10px; border: none;
-           cursor: pointer; font-size: 14px; font-weight: 600;
-           text-decoration: none; transition: all .2s; }
-    .btn-primary  { background: var(--blue);  color: #fff; }
-    .btn-primary:hover  { filter: brightness(1.1); }
-    .btn-success  { background: var(--green); color: #fff; }
-    .btn-success:hover  { filter: brightness(1.1); }
-    .btn-danger   { background: var(--danger); color: #fff; }
-    .btn-outline  { background: transparent; border: 2px solid var(--blue); color: var(--blue); }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px;
+           border-radius: 10px; border: none; cursor: pointer; font-size: 14px;
+           font-weight: 600; text-decoration: none; transition: all .2s; }
+    .btn-primary { background: var(--blue);  color: #fff; }
+    .btn-primary:hover { filter: brightness(1.1); }
+    .btn-success { background: var(--green); color: #fff; }
+    .btn-success:hover { filter: brightness(1.1); }
+    .btn-danger  { background: var(--danger); color: #fff; }
+    .btn-outline { background: transparent; border: 2px solid var(--blue); color: var(--blue); }
     .btn-sm { padding: 6px 12px; font-size: 13px; border-radius: 8px; }
     .btn-full { width: 100%; justify-content: center; }
     .btn:disabled { opacity: .5; cursor: not-allowed; }
-
-    /* ── FORMULARIOS ── */
     .form-group { margin-bottom: 14px; }
     label { display: block; font-size: 13px; font-weight: 600;
             color: var(--muted); margin-bottom: 5px; }
     input, select, textarea {
       width: 100%; padding: 10px 14px; border: 2px solid var(--border);
       border-radius: 10px; font-size: 15px; background: var(--card);
-      color: var(--text); outline: none; transition: border .2s;
-    }
+      color: var(--text); outline: none; transition: border .2s; }
     input:focus, select:focus { border-color: var(--blue); }
-    input.danger { border-color: var(--danger); }
-
-    /* ── TABLA ── */
     .tbl-wrap { overflow-x: auto; border-radius: var(--radius); }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th { background: var(--blue); color: #fff; padding: 10px 12px;
@@ -99,32 +76,24 @@
     td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
     tr:nth-child(even) td { background: #F8FAFF; }
     tr:hover td { background: #EEF4FF; }
-
-    /* ── ALERT ── */
     .alert { padding: 12px 16px; border-radius: 10px; margin-bottom: 14px;
              font-size: 14px; display: flex; align-items: center; gap: 8px; }
     .alert-danger  { background: #FFF0F0; border: 1px solid #FFC0C0; color: #9B1C1C; }
     .alert-success { background: #F0FFF8; border: 1px solid #A7F3D0; color: #065F46; }
     .alert-warn    { background: #FFFBEB; border: 1px solid #FCD34D; color: #92400E; }
-
-    /* ── BADGES ── */
     .badge { display: inline-flex; align-items: center; padding: 3px 8px;
              border-radius: 20px; font-size: 11px; font-weight: 700; }
     .badge-blue  { background: #DBEAFE; color: #1E40AF; }
     .badge-green { background: #D1FAE5; color: #065F46; }
     .badge-red   { background: #FEE2E2; color: #991B1B; }
     .badge-gray  { background: #F3F4F6; color: #374151; }
-
-    /* ── STAT CARDS ── */
     .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr));
              gap: 12px; margin-bottom: 16px; }
     .stat { background: var(--card); border-radius: var(--radius);
             box-shadow: var(--shadow); padding: 16px; text-align: center; }
-    .stat-val  { font-size: 26px; font-weight: 800; color: var(--blue); }
-    .stat-label{ font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .stat-val   { font-size: 26px; font-weight: 800; color: var(--blue); }
+    .stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
     .stat.green .stat-val { color: var(--green); }
-
-    /* ── MODAL ── */
     .modal-overlay { display: none; position: fixed; inset: 0;
                      background: rgba(0,0,0,.5); z-index: 200;
                      align-items: flex-end; justify-content: center; }
@@ -138,8 +107,6 @@
                    display: flex; justify-content: space-between; align-items: center; }
     .modal-close { cursor: pointer; background: none; border: none;
                    font-size: 22px; color: var(--muted); }
-
-    /* ── FLASH ── */
     .flashes { position: fixed; top: 64px; right: 14px; z-index: 300;
                display: flex; flex-direction: column; gap: 8px; max-width: 320px; }
     .flash { padding: 12px 16px; border-radius: 10px; font-size: 14px;
@@ -149,8 +116,6 @@
     .flash-error   { background: var(--danger); color: #fff; }
     @keyframes fadeIn { from { opacity: 0; transform: translateX(20px); }
                         to   { opacity: 1; transform: translateX(0); } }
-
-    /* ── MISC ── */
     .monto { font-weight: 700; color: var(--green); }
     .text-muted { color: var(--muted); font-size: 13px; }
     .text-center { text-align: center; }
@@ -190,12 +155,12 @@
   <a href="{{ url_for('inventario') }}" class="navtab {% if request.endpoint=='inventario'%}active{% endif %}"><span class="ico">📦</span> Inventario</a>
   <a href="{{ url_for('servicios') }}"  class="navtab {% if request.endpoint=='servicios' %}active{% endif %}"><span class="ico">⚙️</span> Servicios</a>
   <a href="{{ url_for('crm') }}"        class="navtab {% if request.endpoint in ('crm','ver_cliente') %}active{% endif %}"><span class="ico">👥</span> CRM</a>
-  <a href="{{ url_for('usuarios') }}"    class="navtab {% if request.endpoint in ('usuarios',) %}active{% endif %}"><span class="ico">👤</span> Usuarios</a>
+  <a href="{{ url_for('usuarios') }}"   class="navtab {% if request.endpoint=='usuarios'  %}active{% endif %}"><span class="ico">👤</span> Usuarios</a>
+  <a href="{{ url_for('finanzas') }}"   class="navtab {% if request.endpoint=='finanzas'  %}active{% endif %}"><span class="ico">💼</span> Finanzas</a>
   {% endif %}
 </nav>
 {% endif %}
 
-<!-- Flash messages -->
 <div class="flashes" id="flashes">
   {% with msgs = get_flashed_messages(with_categories=True) %}
     {% for cat, msg in msgs %}
@@ -209,20 +174,9 @@
 </div>
 
 <script>
-// Auto-dismiss flash messages
-setTimeout(() => {
-  document.querySelectorAll('.flash').forEach(f => f.remove());
-}, 4000);
-
-// Anti-sleep ping every 10 min
+setTimeout(() => { document.querySelectorAll('.flash').forEach(f => f.remove()); }, 4000);
 setInterval(() => fetch('/ping'), 600000);
-
-// Utility: format currency
-function fmtS(n) {
-  return 'S/' + parseFloat(n).toFixed(2);
-}
-
-// Global flash helper
+function fmtS(n) { return 'S/' + parseFloat(n).toFixed(2); }
 function showFlash(msg, type='success') {
   const el = document.createElement('div');
   el.className = `flash flash-${type}`;
