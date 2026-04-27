@@ -1,0 +1,499 @@
+{% extends 'base.html' %}
+{% block title %}Finanzas{% endblock %}
+
+{% block head %}
+<style>
+  .fin-tabs { display:flex; gap:4px; border-bottom:2px solid var(--border);
+              margin-bottom:18px; overflow-x:auto; scrollbar-width:none; }
+  .fin-tab  { padding:10px 16px; border:none; background:transparent; cursor:pointer;
+              font-size:14px; font-weight:600; color:var(--muted); white-space:nowrap;
+              border-bottom:3px solid transparent; transition:all .2s; }
+  .fin-tab.active { color:var(--blue); border-bottom-color:var(--blue); }
+  .fin-section { display:none; }
+  .fin-section.active { display:block; }
+
+  /* Salud */
+  .salud-card { border-radius:var(--radius); padding:18px 22px; color:#fff; text-align:center; }
+  .salud-green  { background:var(--green); }
+  .salud-warn   { background:#D69E2E; }
+  .salud-danger { background:var(--danger); }
+  .salud-val    { font-size:28px; font-weight:900; }
+  .salud-lbl    { font-size:14px; opacity:.9; }
+
+  /* Distribución */
+  .dist-row { display:flex; justify-content:space-between; align-items:center;
+              padding:10px 0; border-bottom:1px solid var(--border); }
+  .dist-row:last-child { border:none; }
+  .dist-pct  { font-size:13px; color:var(--muted); }
+  .dist-monto{ font-size:18px; font-weight:800; color:var(--green); }
+
+  /* Insumos */
+  .insumo-card { background:var(--card); border-radius:var(--radius);
+                 box-shadow:var(--shadow); padding:16px; margin-bottom:12px; }
+  .stock-bar-wrap { background:#E5E7EB; border-radius:20px; height:14px; overflow:hidden; margin:8px 0; }
+  .stock-bar      { height:100%; border-radius:20px; transition:width .5s; }
+  .stock-ok     { background:var(--green); }
+  .stock-low    { background:var(--warn); }
+  .stock-empty  { background:var(--danger); }
+
+  .mode-badge { display:inline-flex; align-items:center; gap:5px; padding:4px 10px;
+                border-radius:20px; font-size:11px; font-weight:700; cursor:pointer; }
+  .mode-manual  { background:#EEF4FF; color:var(--blue); }
+  .mode-ventas  { background:#D1FAE5; color:var(--green); }
+
+  /* Gastos table */
+  .gasto-row { display:flex; justify-content:space-between; align-items:center;
+               padding:10px 0; border-bottom:1px solid var(--border); gap:10px;
+               flex-wrap:wrap; }
+  .gasto-row:last-child { border:none; }
+  .gasto-info { flex:1; min-width:150px; }
+  .gasto-cat  { font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px;
+                background:#EEF4FF; color:var(--blue); }
+
+  /* Subcategoria select dinámico */
+  .sub-wrap { position:relative; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2 style="font-size:19px;font-weight:800;color:var(--blue);margin-bottom:4px">💼 Finanzas</h2>
+<p class="text-muted" style="margin-bottom:14px;font-size:13px">
+  Mes actual: <strong>{{ hoy.strftime('%B %Y') }}</strong>
+</p>
+
+<!-- Tabs -->
+<div class="fin-tabs">
+  <button class="fin-tab active" onclick="showTab('resumen',this)">📊 Resumen del mes</button>
+  <button class="fin-tab" onclick="showTab('gastos',this)">💸 Gastos</button>
+  <button class="fin-tab" onclick="showTab('insumos',this)">📦 Insumos</button>
+</div>
+
+<!-- ══ TAB: RESUMEN ══════════════════════════════════════════════ -->
+<div class="fin-section active" id="tab-resumen">
+
+  <!-- Salud -->
+  <div class="salud-card salud-{{ salud_color }}" style="margin-bottom:16px">
+    <div class="salud-val">{{ salud }}</div>
+    <div class="salud-lbl">Margen neto: {{ "%.1f"|format(margen) }}%</div>
+  </div>
+
+  <!-- Métricas -->
+  <div class="stats" style="margin-bottom:16px">
+    <div class="stat green">
+      <div class="stat-val">S/{{ "%.2f"|format(ing_mes) }}</div>
+      <div class="stat-label">Ingresos del mes</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" style="color:var(--danger)">S/{{ "%.2f"|format(gastos_mes_total) }}</div>
+      <div class="stat-label">Gastos del mes</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val">S/{{ "%.2f"|format(util_bruta) }}</div>
+      <div class="stat-label">Utilidad bruta</div>
+    </div>
+    <div class="stat green">
+      <div class="stat-val">S/{{ "%.2f"|format(util_neta) }}</div>
+      <div class="stat-label">Utilidad neta</div>
+    </div>
+  </div>
+
+  <!-- Costos fijos -->
+  <div class="card">
+    <div class="card-title">⚡ Costos fijos estimados</div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <label style="font-size:13px;color:var(--muted)">Electricidad (S/mes):</label>
+      <input type="number" id="costo-elec" value="{{ costo_elec }}" step="0.50" min="0"
+             style="width:100px;font-weight:700;text-align:center">
+      <button class="btn btn-primary btn-sm" onclick="guardarConfigFinanzas()">💾 Guardar</button>
+    </div>
+    <div style="margin-top:10px;font-size:13px;color:var(--muted)">
+      Total costos fijos: <strong>S/{{ "%.2f"|format(costo_elec) }}</strong> →
+      Utilidad neta: <strong style="color:var(--green)">S/{{ "%.2f"|format(util_neta) }}</strong>
+    </div>
+  </div>
+
+  <!-- Distribución recomendada -->
+  {% if util_neta > 0 %}
+  <div class="card">
+    <div class="card-title">🎯 Distribución recomendada de la utilidad neta</div>
+    <div class="dist-row">
+      <div>
+        <div style="font-weight:700">🔄 Reinversión en insumos</div>
+        <div class="dist-pct">40% de la utilidad neta</div>
+      </div>
+      <div class="dist-monto">S/{{ "%.2f"|format(util_neta * 0.40) }}</div>
+    </div>
+    <div class="dist-row">
+      <div>
+        <div style="font-weight:700">🏦 Ahorro / Fondo de emergencia</div>
+        <div class="dist-pct">30% de la utilidad neta</div>
+      </div>
+      <div class="dist-monto">S/{{ "%.2f"|format(util_neta * 0.30) }}</div>
+    </div>
+    <div class="dist-row">
+      <div>
+        <div style="font-weight:700">🚀 Crecimiento</div>
+        <div class="dist-pct">20% de la utilidad neta</div>
+      </div>
+      <div class="dist-monto">S/{{ "%.2f"|format(util_neta * 0.20) }}</div>
+    </div>
+    <div class="dist-row">
+      <div>
+        <div style="font-weight:700">💵 Retiro personal</div>
+        <div class="dist-pct">10% de la utilidad neta</div>
+      </div>
+      <div class="dist-monto">S/{{ "%.2f"|format(util_neta * 0.10) }}</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-danger">
+    ⚠️ La utilidad neta es negativa o cero. Revisa tus gastos y precios.
+  </div>
+  {% endif %}
+</div>
+
+<!-- ══ TAB: GASTOS ═══════════════════════════════════════════════ -->
+<div class="fin-section" id="tab-gastos">
+
+  <!-- Formulario nuevo gasto -->
+  <div class="card">
+    <div class="card-title">➕ Registrar gasto</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label>Fecha</label>
+        <input type="date" id="g-fecha" value="{{ hoy.strftime('%Y-%m-%d') }}">
+      </div>
+      <div class="form-group">
+        <label>Categoría</label>
+        <select id="g-cat" onchange="actualizarSubcat()">
+          <option>Insumos</option>
+          <option>Servicios</option>
+          <option>Equipos</option>
+          <option>Otros</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Subcategoría</label>
+      <select id="g-subcat"></select>
+      <input type="text" id="g-subcat-libre" placeholder="Especifica el gasto…"
+             style="display:none;margin-top:6px">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label>Monto (S/)</label>
+        <input type="number" id="g-monto" step="0.10" min="0" placeholder="0.00"
+               style="font-size:20px;font-weight:700;text-align:center">
+      </div>
+      <div class="form-group">
+        <label>Tipo</label>
+        <select id="g-tipo">
+          <option value="unica">Inversión única</option>
+          <option value="recurrente">Gasto recurrente</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Descripción (opcional)</label>
+      <input type="text" id="g-desc" placeholder="Ej: Resma papel A4 70g…">
+    </div>
+    <button class="btn btn-success btn-full" onclick="guardarGasto()">💾 Registrar gasto</button>
+  </div>
+
+  <!-- Historial de gastos del mes -->
+  <div class="card">
+    <div class="card-title">📋 Gastos del mes</div>
+
+    <!-- Filtros -->
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <input type="month" id="f-mes" value="{{ hoy.strftime('%Y-%m') }}"
+             onchange="cargarGastos()" style="flex:1;min-width:140px">
+      <select id="f-cat" onchange="cargarGastos()" style="flex:1;min-width:120px">
+        <option value="">— Categoría —</option>
+        <option>Insumos</option><option>Servicios</option>
+        <option>Equipos</option><option>Otros</option>
+      </select>
+    </div>
+
+    <div id="gastos-lista">
+      {% for g in gastos_mes_lista %}
+      <div class="gasto-row" id="gasto-{{ g.id }}">
+        <div class="gasto-info">
+          <div style="font-weight:700">{{ g.subcategoria }}
+            <span class="badge badge-{{ 'blue' if g.tipo=='unica' else 'green' }}">
+              {{ 'Única' if g.tipo=='unica' else 'Recurrente' }}
+            </span>
+          </div>
+          <div style="font-size:12px;color:var(--muted)">
+            {{ g.fecha.strftime('%d/%m/%Y') }} · {{ g.categoria }}
+            {% if g.descripcion %} · {{ g.descripcion }}{% endif %}
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="monto">S/{{ "%.2f"|format(g.monto) }}</span>
+          <button onclick="eliminarGasto({{ g.id }})"
+                  style="background:#FEE2E2;color:#991B1B;border:none;border-radius:6px;padding:4px 8px;cursor:pointer">🗑</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div style="background:#F0FFF8;border:1px solid #A7F3D0;border-radius:10px;
+                padding:12px 16px;display:flex;justify-content:space-between;margin-top:12px"
+         id="gastos-total-bar">
+      <span>Total del mes</span>
+      <span class="monto" style="font-size:18px" id="gastos-total-val">
+        S/{{ "%.2f"|format(gastos_mes_total) }}
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TAB: INSUMOS ══════════════════════════════════════════════ -->
+<div class="fin-section" id="tab-insumos">
+
+  <div class="alert alert-warn" style="margin-bottom:14px">
+    📌 <strong>Modo de consumo:</strong> <em>Ventas</em> = el stock se descuenta automáticamente con cada venta.
+    <em>Manual</em> = tú registras las salidas manualmente.
+  </div>
+
+  <!-- Agregar insumo -->
+  <div class="card">
+    <div class="card-title">➕ Agregar insumo a seguimiento</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;flex-wrap:wrap">
+      <div class="form-group" style="margin:0">
+        <label>Nombre</label>
+        <input type="text" id="ni-nombre" placeholder="Ej: Papel foto, Tóner…">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Unidad</label>
+        <select id="ni-unidad">
+          <option value="hojas">hojas</option>
+          <option value="ml">ml</option>
+          <option value="unidad">unidad</option>
+          <option value="caja">caja</option>
+          <option value="resma">resma</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Consumo</label>
+        <select id="ni-modo">
+          <option value="manual">Manual</option>
+          <option value="ventas">Ligado a ventas</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-success btn-sm mt-2" onclick="agregarInsumo()">+ Agregar</button>
+  </div>
+
+  <!-- Lista de insumos -->
+  <div id="insumos-lista">
+    {% for ins in insumos %}
+    <div class="insumo-card" id="ins-{{ ins.id }}">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-weight:700;font-size:16px">{{ ins.nombre }}</div>
+          <div style="font-size:12px;color:var(--muted)">Unidad: {{ ins.unidad }}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:24px;font-weight:900;color:var(--blue)">
+            {{ ins.stock_actual|int }}<span style="font-size:13px;font-weight:400"> {{ ins.unidad }}</span>
+          </div>
+          <div id="ins-modo-{{ ins.id }}"
+               class="mode-badge mode-{{ ins.consumo_modo }}"
+               onclick="toggleModo({{ ins.id }}, '{{ ins.consumo_modo }}')"
+               title="Clic para cambiar modo">
+            {{ '🔗 Ligado a ventas' if ins.consumo_modo == 'ventas' else '✋ Manual' }}
+          </div>
+        </div>
+      </div>
+
+      <div class="stock-bar-wrap">
+        {% set pct = [ins.stock_actual, 100]|min %}
+        <div class="stock-bar {{ 'stock-ok' if ins.stock_actual > 20 else ('stock-low' if ins.stock_actual > 0 else 'stock-empty') }}"
+             style="width:{{ pct }}%"></div>
+      </div>
+
+      <!-- Registrar movimiento -->
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <input type="number" min="0" step="1" placeholder="Cantidad" id="mov-cant-{{ ins.id }}"
+               style="width:90px;font-weight:700;text-align:center">
+        <input type="text" placeholder="Nota (opcional)" id="mov-nota-{{ ins.id }}"
+               style="flex:1;min-width:120px;font-size:13px">
+        <button class="btn btn-success btn-sm" onclick="movimiento({{ ins.id }}, 'entrada')">
+          📥 Entrada
+        </button>
+        <button class="btn btn-sm" style="background:#FEE2E2;color:#991B1B;border:none"
+                onclick="movimiento({{ ins.id }}, 'salida')">
+          📤 Salida
+        </button>
+      </div>
+
+      <!-- Historial movimientos -->
+      {% if ins.movimientos %}
+      <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">Últimos movimientos</div>
+        {% for m in ins.movimientos[-5:]|reverse %}
+        <div style="display:flex;justify-content:space-between;font-size:12px;
+                    padding:3px 0;color:{{ '#065F46' if m.tipo=='entrada' else '#991B1B' }}">
+          <span>{{ '📥' if m.tipo=='entrada' else '📤' }} {{ m.fecha.strftime('%d/%m') }}
+                {{ ' · ' + m.nota if m.nota else '' }}</span>
+          <span style="font-weight:700">{{ '+' if m.tipo=='entrada' else '-' }}{{ m.cantidad|int }} {{ ins.unidad }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Tabs ──────────────────────────────────────────────────────
+function showTab(id, btn) {
+  document.querySelectorAll('.fin-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.fin-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── Subcategorías dinámicas ───────────────────────────────────
+const SUBCATS = {
+  'Insumos':   ['Papel bond','Papel fotográfico','Tinta negra','Tinta color','Otros insumos'],
+  'Servicios': ['Electricidad','Internet','Otros servicios'],
+  'Equipos':   ['Equipo nuevo','Mantenimiento','Otros equipos'],
+  'Otros':     ['Libre'],
+};
+
+function actualizarSubcat() {
+  const cat   = document.getElementById('g-cat').value;
+  const sel   = document.getElementById('g-subcat');
+  const libre = document.getElementById('g-subcat-libre');
+  sel.innerHTML = SUBCATS[cat].map(s => `<option>${s}</option>`).join('');
+  libre.style.display = (cat === 'Otros') ? 'block' : 'none';
+}
+actualizarSubcat();
+
+// ── Guardar gasto ─────────────────────────────────────────────
+async function guardarGasto() {
+  const cat    = document.getElementById('g-cat').value;
+  const subcat = cat === 'Otros'
+    ? document.getElementById('g-subcat-libre').value.trim()
+    : document.getElementById('g-subcat').value;
+  const monto  = parseFloat(document.getElementById('g-monto').value);
+  const fecha  = document.getElementById('g-fecha').value;
+  const tipo   = document.getElementById('g-tipo').value;
+  const desc   = document.getElementById('g-desc').value.trim();
+
+  if (!subcat)           { showFlash('Especifica la subcategoría', 'error'); return; }
+  if (!monto || monto<=0){ showFlash('Monto inválido', 'error'); return; }
+
+  const fd = new FormData();
+  fd.append('fecha', fecha); fd.append('categoria', cat);
+  fd.append('subcategoria', subcat); fd.append('monto', monto);
+  fd.append('tipo', tipo); if (desc) fd.append('descripcion', desc);
+
+  const r    = await fetch('/finanzas/gasto/nuevo', { method:'POST', body:fd });
+  const data = await r.json();
+
+  if (data.id) {
+    showFlash(`✓ Gasto S/${monto.toFixed(2)} registrado`, 'success');
+    document.getElementById('g-monto').value = '';
+    document.getElementById('g-desc').value  = '';
+    cargarGastos();
+  } else { showFlash(data.error || 'Error', 'error'); }
+}
+
+// ── Cargar gastos (filtros) ───────────────────────────────────
+async function cargarGastos() {
+  const mes = document.getElementById('f-mes').value;
+  const cat = document.getElementById('f-cat').value;
+  const r    = await fetch(`/finanzas/gastos?mes=${mes}&cat=${encodeURIComponent(cat)}`);
+  const data = await r.json();
+
+  const lista = document.getElementById('gastos-lista');
+  lista.innerHTML = data.gastos.length
+    ? data.gastos.map(g => `
+      <div class="gasto-row" id="gasto-${g.id}">
+        <div class="gasto-info">
+          <div style="font-weight:700">${g.subcategoria}
+            <span class="badge badge-${g.tipo==='unica'?'blue':'green'}">${g.tipo==='unica'?'Única':'Recurrente'}</span>
+          </div>
+          <div style="font-size:12px;color:var(--muted)">${g.fecha} · ${g.categoria}${g.descripcion?' · '+g.descripcion:''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="monto">S/${g.monto.toFixed(2)}</span>
+          <button onclick="eliminarGasto(${g.id})"
+                  style="background:#FEE2E2;color:#991B1B;border:none;border-radius:6px;padding:4px 8px;cursor:pointer">🗑</button>
+        </div>
+      </div>`).join('')
+    : '<p class="text-muted text-center" style="padding:20px">Sin gastos en este período.</p>';
+
+  document.getElementById('gastos-total-val').textContent = 'S/' + data.total.toFixed(2);
+}
+
+async function eliminarGasto(id) {
+  if (!confirm('¿Eliminar este gasto?')) return;
+  const r    = await fetch(`/finanzas/gasto/eliminar/${id}`, { method:'POST' });
+  const data = await r.json();
+  if (data.success) { document.getElementById('gasto-'+id)?.remove(); showFlash('Gasto eliminado','success'); cargarGastos(); }
+}
+
+// ── Config finanzas ───────────────────────────────────────────
+async function guardarConfigFinanzas() {
+  const elec = document.getElementById('costo-elec').value;
+  const fd   = new FormData(); fd.append('costo_electricidad', elec);
+  const r    = await fetch('/finanzas/config', { method:'POST', body:fd });
+  const data = await r.json();
+  if (data.success) { showFlash('✓ Configuración guardada', 'success'); setTimeout(()=>location.reload(),1200); }
+}
+
+// ── Insumos ───────────────────────────────────────────────────
+async function agregarInsumo() {
+  const nombre = document.getElementById('ni-nombre').value.trim();
+  const unidad = document.getElementById('ni-unidad').value;
+  const modo   = document.getElementById('ni-modo').value;
+  if (!nombre) { showFlash('El nombre es requerido', 'error'); return; }
+  const fd = new FormData();
+  fd.append('nombre', nombre); fd.append('unidad', unidad); fd.append('consumo_modo', modo);
+  const r    = await fetch('/finanzas/insumos/nuevo', { method:'POST', body:fd });
+  const data = await r.json();
+  if (data.id) { showFlash(`✓ Insumo "${data.nombre}" agregado`, 'success'); setTimeout(()=>location.reload(),1200); }
+  else showFlash(data.error || 'Error', 'error');
+}
+
+async function movimiento(id, tipo) {
+  const cant = parseFloat(document.getElementById('mov-cant-'+id).value);
+  const nota = document.getElementById('mov-nota-'+id).value.trim();
+  if (!cant || cant <= 0) { showFlash('Ingresa una cantidad', 'error'); return; }
+  const fd = new FormData();
+  fd.append('insumo_id', id); fd.append('tipo', tipo);
+  fd.append('cantidad', cant); if (nota) fd.append('nota', nota);
+  const r    = await fetch('/finanzas/insumos/movimiento', { method:'POST', body:fd });
+  const data = await r.json();
+  if (data.success) {
+    showFlash(`${tipo==='entrada'?'📥 Entrada':'📤 Salida'}: ${cant} uds · Stock: ${Math.floor(data.stock_actual)}`, 'success');
+    document.getElementById('mov-cant-'+id).value = '';
+    document.getElementById('mov-nota-'+id).value = '';
+    setTimeout(() => location.reload(), 1200);
+  } else showFlash(data.error || 'Error', 'error');
+}
+
+async function toggleModo(id, modoActual) {
+  const nuevoModo = modoActual === 'manual' ? 'ventas' : 'manual';
+  if (!confirm(`¿Cambiar a modo "${nuevoModo === 'ventas' ? 'Ligado a ventas' : 'Manual'}"?`)) return;
+  const fd = new FormData(); fd.append('modo', nuevoModo);
+  const r    = await fetch(`/finanzas/insumos/modo/${id}`, { method:'POST', body:fd });
+  const data = await r.json();
+  if (data.success) {
+    const badge = document.getElementById('ins-modo-'+id);
+    badge.className   = `mode-badge mode-${nuevoModo}`;
+    badge.textContent = nuevoModo === 'ventas' ? '🔗 Ligado a ventas' : '✋ Manual';
+    badge.setAttribute('onclick', `toggleModo(${id}, '${nuevoModo}')`);
+    showFlash('Modo actualizado', 'success');
+  }
+}
+</script>
+{% endblock %}
