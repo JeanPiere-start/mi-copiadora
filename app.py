@@ -160,6 +160,26 @@ def admin_required(f):
 def init_db():
     db.create_all()
 
+    # Migraciones — SIEMPRE primero, antes de cualquier query
+    migraciones = [
+        'ALTER TABLE ventas ADD COLUMN IF NOT EXISTS descripcion VARCHAR(200)',
+        'ALTER TABLE ventas ADD COLUMN IF NOT EXISTS nivel_nombre VARCHAR(100)',
+        'ALTER TABLE ventas ADD COLUMN IF NOT EXISTS nota VARCHAR(200)',
+        'ALTER TABLE ventas ADD COLUMN IF NOT EXISTS descuento FLOAT DEFAULT 0',
+        'ALTER TABLE servicios ADD COLUMN IF NOT EXISTS descuento_volumen BOOLEAN DEFAULT FALSE',
+    ]
+    try:
+        from sqlalchemy import text
+        with db.engine.connect() as conn:
+            for sql in migraciones:
+                try:
+                    conn.execute(text(sql))
+                except Exception:
+                    pass
+            conn.commit()
+    except Exception:
+        pass
+
     # Usuarios
     if not Usuario.query.first():
         db.session.add_all([
@@ -186,26 +206,6 @@ def init_db():
             for i, (nnom, nprec) in enumerate(niveles):
                 db.session.add(ServicioNivel(servicio_id=s.id, nombre=nnom,
                                              precio=nprec, orden=i))
-
-    # Migraciones de columnas nuevas
-    migraciones = [
-        'ALTER TABLE ventas ADD COLUMN descripcion VARCHAR(200)',
-        'ALTER TABLE ventas ADD COLUMN nivel_nombre VARCHAR(100)',
-        'ALTER TABLE ventas ADD COLUMN nota VARCHAR(200)',
-        'ALTER TABLE ventas ADD COLUMN descuento FLOAT DEFAULT 0',
-        'ALTER TABLE servicios ADD COLUMN descuento_volumen BOOLEAN DEFAULT FALSE',
-    ]
-    try:
-        from sqlalchemy import text
-        with db.engine.connect() as conn:
-            for sql in migraciones:
-                try:
-                    conn.execute(text(sql))
-                except Exception:
-                    pass
-            conn.commit()
-    except Exception:
-        pass
 
     # Servicio especial para ventas personalizadas (oculto en botones)
     if not Servicio.query.filter_by(nombre='__personalizado__').first():
