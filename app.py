@@ -124,6 +124,40 @@ class PuntosHistorial(db.Model):
     cliente = db.relationship('Cliente', backref='historial_puntos')
 
 
+class Gasto(db.Model):
+    __tablename__ = 'gastos'
+    id           = db.Column(db.Integer, primary_key=True)
+    fecha        = db.Column(db.Date, nullable=False)
+    categoria    = db.Column(db.String(50), nullable=False)
+    subcategoria = db.Column(db.String(100), nullable=False)
+    descripcion  = db.Column(db.String(200), nullable=True)
+    monto        = db.Column(db.Float, nullable=False)
+    tipo         = db.Column(db.String(30), nullable=False)
+    usuario_id   = db.Column(db.Integer, db.ForeignKey("usuarios.id"), nullable=True)
+    usuario      = db.relationship("Usuario", backref="gastos")
+
+
+class InsumoStock(db.Model):
+    __tablename__ = "insumo_stock"
+    id           = db.Column(db.Integer, primary_key=True)
+    nombre       = db.Column(db.String(100), nullable=False, unique=True)
+    unidad       = db.Column(db.String(30), default="hojas")
+    stock_actual = db.Column(db.Float, default=0)
+    consumo_modo = db.Column(db.String(20), default="manual")  # manual / ventas
+    activo       = db.Column(db.Boolean, default=True)
+
+
+class InsumoMovimiento(db.Model):
+    __tablename__ = "insumo_movimientos"
+    id        = db.Column(db.Integer, primary_key=True)
+    insumo_id = db.Column(db.Integer, db.ForeignKey("insumo_stock.id"), nullable=False)
+    fecha     = db.Column(db.Date, nullable=False)
+    tipo      = db.Column(db.String(10), nullable=False)   # entrada / salida
+    cantidad  = db.Column(db.Float, nullable=False)
+    nota      = db.Column(db.String(200), nullable=True)
+    insumo    = db.relationship("InsumoStock", backref="movimientos")
+
+
 # ============================================================
 # HELPERS
 # ============================================================
@@ -167,6 +201,9 @@ def init_db():
         'ALTER TABLE ventas ADD COLUMN IF NOT EXISTS nota VARCHAR(200)',
         'ALTER TABLE ventas ADD COLUMN IF NOT EXISTS descuento FLOAT DEFAULT 0',
         'ALTER TABLE servicios ADD COLUMN IF NOT EXISTS descuento_volumen BOOLEAN DEFAULT FALSE',
+        'CREATE TABLE IF NOT EXISTS gastos (id SERIAL PRIMARY KEY, fecha DATE NOT NULL, categoria VARCHAR(50) NOT NULL, subcategoria VARCHAR(100) NOT NULL, descripcion VARCHAR(200), monto FLOAT NOT NULL, tipo VARCHAR(30) NOT NULL, usuario_id INTEGER)',
+        'CREATE TABLE IF NOT EXISTS insumo_stock (id SERIAL PRIMARY KEY, nombre VARCHAR(100) UNIQUE NOT NULL, unidad VARCHAR(30) DEFAULT \'hojas\', stock_actual FLOAT DEFAULT 0, consumo_modo VARCHAR(20) DEFAULT \'manual\', activo BOOLEAN DEFAULT TRUE)',
+        'CREATE TABLE IF NOT EXISTS insumo_movimientos (id SERIAL PRIMARY KEY, insumo_id INTEGER NOT NULL, fecha DATE NOT NULL, tipo VARCHAR(10) NOT NULL, cantidad FLOAT NOT NULL, nota VARCHAR(200))',
     ]
     try:
         from sqlalchemy import text
@@ -227,6 +264,32 @@ def init_db():
     for clave, valor in defaults.items():
         if not Configuracion.query.filter_by(clave=clave).first():
             db.session.add(Configuracion(clave=clave, valor=valor))
+
+    # Gastos iniciales
+    if not Gasto.query.first():
+        from datetime import date as _date
+        db.session.add_all([
+            Gasto(fecha=_date(2026,4,1),  categoria='Insumos', subcategoria='Papel bond',
+                  descripcion='Resma papel bond', monto=10.30, tipo='unica'),
+            Gasto(fecha=_date(2026,4,26), categoria='Insumos', subcategoria='Papel fotográfico',
+                  descripcion='Papel fotográfico', monto=7.00, tipo='unica'),
+        ])
+
+    # Insumos de stock iniciales
+    insumos_iniciales = [
+        ('Papel fotográfico', 'hojas', 'manual'),
+        ('Tinta negra',       'ml',    'manual'),
+        ('Tinta color',       'ml',    'manual'),
+        ('Grapas',            'caja',  'manual'),
+    ]
+    for nom, unidad, modo in insumos_iniciales:
+        if not InsumoStock.query.filter_by(nombre=nom).first():
+            db.session.add(InsumoStock(nombre=nom, unidad=unidad,
+                                       consumo_modo=modo, stock_actual=0))
+
+    # Configuración costos fijos finanzas
+    if not Configuracion.query.filter_by(clave='costo_electricidad').first():
+        db.session.add(Configuracion(clave='costo_electricidad', valor='15.00'))
 
     db.session.commit()
 
@@ -1091,6 +1154,198 @@ def eliminar_venta(id):
     db.session.delete(v)
     db.session.commit()
     return jsonify({'success': True})
+
+
+
+# ============================================================
+# FINANZAS  (solo admin)
+# ============================================================
+
+SUBCATEGORIAS = {
+    'Insumos':   ['Papel bond', 'Papel fotográfico', 'Tinta negra', 'Tinta color', 'Otros insumos'],
+    'Servicios': ['Electricidad', 'Internet', 'Otros servicios'],
+    'Equipos':   ['Equipo nuevo', 'Mantenimiento', 'Otros equipos'],
+    'Otros':     ['Libre'],
+}
+
+@app.route('/finanzas')
+@admin_required
+def finanzas():
+    from sqlalchemy import func
+    hoy    = date.today()
+    primer = hoy.replace(day=1)
+
+    # Ingresos del mes
+    ing_mes = (db.session.query(func.sum(Venta.total))
+               .filter(Venta.fecha >= primer, Venta.fecha <= hoy).scalar() or 0)
+
+    # Gastos del mes
+    gastos_mes_lista = Gasto.query.filter(
+        Gasto.fecha >= primer, Gasto.fecha <= hoy).order_by(Gasto.fecha.desc()).all()
+    gastos_mes_total = sum(g.monto for g in gastos_mes_lista)
+
+    # Costos fijos
+    costo_elec = float(get_config('costo_electricidad', '15.00'))
+
+    util_bruta = ing_mes - gastos_mes_total
+    util_neta  = util_bruta - costo_elec
+    margen     = (util_neta / ing_mes * 100) if ing_mes > 0 else 0
+
+    if margen > 60:   salud, salud_color = 'SALUDABLE', 'green'
+    elif margen >= 30: salud, salud_color = 'ATENCIÓN',  'warn'
+    else:              salud, salud_color = 'REVISAR',   'danger'
+
+    # Insumos
+    insumos = InsumoStock.query.filter_by(activo=True).all()
+
+    return render_template('finanzas.html',
+        ing_mes=ing_mes, gastos_mes_total=gastos_mes_total,
+        gastos_mes_lista=gastos_mes_lista,
+        costo_elec=costo_elec,
+        util_bruta=util_bruta, util_neta=util_neta, margen=margen,
+        salud=salud, salud_color=salud_color,
+        subcategorias=SUBCATEGORIAS, insumos=insumos,
+        hoy=hoy, primer=primer)
+
+
+@app.route('/finanzas/gasto/nuevo', methods=['POST'])
+@admin_required
+def nuevo_gasto():
+    fecha_str    = request.form.get('fecha', str(date.today()))
+    categoria    = request.form.get('categoria', 'Otros')
+    subcategoria = request.form.get('subcategoria', '').strip()
+    descripcion  = request.form.get('descripcion', '').strip() or None
+    monto        = request.form.get('monto', type=float)
+    tipo         = request.form.get('tipo', 'unica')
+
+    if not monto or monto <= 0:
+        return jsonify({'error': 'Monto inválido'}), 400
+    if not subcategoria:
+        return jsonify({'error': 'Subcategoría requerida'}), 400
+
+    try:
+        fecha = date.fromisoformat(fecha_str)
+    except Exception:
+        fecha = date.today()
+
+    g = Gasto(fecha=fecha, categoria=categoria, subcategoria=subcategoria,
+              descripcion=descripcion, monto=monto, tipo=tipo,
+              usuario_id=session.get('usuario_id'))
+    db.session.add(g)
+    db.session.commit()
+    return jsonify({'id': g.id, 'monto': g.monto, 'subcategoria': g.subcategoria})
+
+
+@app.route('/finanzas/gasto/eliminar/<int:id>', methods=['POST'])
+@admin_required
+def eliminar_gasto(id):
+    g = Gasto.query.get_or_404(id)
+    db.session.delete(g)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@app.route('/finanzas/gastos')
+@admin_required
+def historial_gastos():
+    mes  = request.args.get('mes',  date.today().strftime('%Y-%m'))
+    cat  = request.args.get('cat',  '')
+    try:
+        primer = date.fromisoformat(mes + '-01')
+        ultimo = (primer.replace(month=primer.month % 12 + 1, day=1)
+                  if primer.month < 12 else primer.replace(year=primer.year+1, month=1, day=1))
+    except Exception:
+        primer = date.today().replace(day=1)
+        ultimo = date.today()
+
+    q = Gasto.query.filter(Gasto.fecha >= primer, Gasto.fecha < ultimo)
+    if cat:
+        q = q.filter(Gasto.categoria == cat)
+    gastos = q.order_by(Gasto.fecha.desc()).all()
+    total  = sum(g.monto for g in gastos)
+    return jsonify({
+        'gastos': [{'id': g.id, 'fecha': g.fecha.strftime('%d/%m/%Y'),
+                    'categoria': g.categoria, 'subcategoria': g.subcategoria,
+                    'descripcion': g.descripcion or '', 'monto': g.monto,
+                    'tipo': g.tipo} for g in gastos],
+        'total': total
+    })
+
+
+@app.route('/finanzas/config', methods=['POST'])
+@admin_required
+def guardar_config_finanzas():
+    costo_elec = request.form.get('costo_electricidad', type=float)
+    if costo_elec is not None:
+        c = Configuracion.query.filter_by(clave='costo_electricidad').first()
+        if c: c.valor = str(costo_elec)
+        else: db.session.add(Configuracion(clave='costo_electricidad', valor=str(costo_elec)))
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+# ── Insumos ──────────────────────────────────────────────────
+
+@app.route('/finanzas/insumos')
+@admin_required
+def ver_insumos():
+    insumos = InsumoStock.query.filter_by(activo=True).all()
+    return jsonify([{
+        'id': i.id, 'nombre': i.nombre, 'unidad': i.unidad,
+        'stock_actual': i.stock_actual, 'consumo_modo': i.consumo_modo,
+        'movimientos': [{'tipo': m.tipo, 'cantidad': m.cantidad,
+                         'fecha': m.fecha.strftime('%d/%m/%Y'), 'nota': m.nota or ''}
+                        for m in sorted(i.movimientos, key=lambda x: x.fecha, reverse=True)[:10]]
+    } for i in insumos])
+
+
+@app.route('/finanzas/insumos/nuevo', methods=['POST'])
+@admin_required
+def nuevo_insumo():
+    nombre = request.form.get('nombre', '').strip()
+    unidad = request.form.get('unidad', 'hojas').strip()
+    modo   = request.form.get('consumo_modo', 'manual')
+    if not nombre:
+        return jsonify({'error': 'Nombre requerido'}), 400
+    if InsumoStock.query.filter_by(nombre=nombre).first():
+        return jsonify({'error': 'Ya existe ese insumo'}), 400
+    i = InsumoStock(nombre=nombre, unidad=unidad, consumo_modo=modo, stock_actual=0)
+    db.session.add(i)
+    db.session.commit()
+    return jsonify({'id': i.id, 'nombre': i.nombre, 'unidad': i.unidad,
+                    'stock_actual': 0, 'consumo_modo': i.consumo_modo})
+
+
+@app.route('/finanzas/insumos/movimiento', methods=['POST'])
+@admin_required
+def movimiento_insumo():
+    insumo_id = request.form.get('insumo_id', type=int)
+    tipo      = request.form.get('tipo', 'entrada')   # entrada / salida
+    cantidad  = request.form.get('cantidad', type=float)
+    nota      = request.form.get('nota', '').strip() or None
+
+    if not insumo_id or not cantidad or cantidad <= 0:
+        return jsonify({'error': 'Datos inválidos'}), 400
+
+    ins = InsumoStock.query.get_or_404(insumo_id)
+    if tipo == 'entrada':
+        ins.stock_actual += cantidad
+    else:
+        ins.stock_actual = max(0, ins.stock_actual - cantidad)
+
+    db.session.add(InsumoMovimiento(insumo_id=insumo_id, fecha=date.today(),
+                                     tipo=tipo, cantidad=cantidad, nota=nota))
+    db.session.commit()
+    return jsonify({'success': True, 'stock_actual': ins.stock_actual, 'nombre': ins.nombre})
+
+
+@app.route('/finanzas/insumos/modo/<int:id>', methods=['POST'])
+@admin_required
+def cambiar_modo_insumo(id):
+    ins = InsumoStock.query.get_or_404(id)
+    ins.consumo_modo = request.form.get('modo', 'manual')
+    db.session.commit()
+    return jsonify({'success': True, 'consumo_modo': ins.consumo_modo})
 
 
 # ============================================================
