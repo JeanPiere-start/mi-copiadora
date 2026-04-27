@@ -82,8 +82,10 @@
       <span class="srv-name">{{ s.nombre }}</span>
       {% if s.precio == 0 %}
         <span class="srv-price" style="color:var(--warn);font-size:11px">Precio variable</span>
+      {% elif s.niveles %}
+        <span class="srv-price">desde S/{{ "%.2f"|format(s.niveles|map(attribute='precio')|min) }}</span>
       {% else %}
-        <span class="srv-price">desde S/{{ "%.2f"|format(s.precio) }}</span>
+        <span class="srv-price">S/{{ "%.2f"|format(s.precio) }}</span>
       {% endif %}
       {% if s.descuento_volumen %}
         <span class="srv-disc">🏷 -8% desde 10 uds</span>
